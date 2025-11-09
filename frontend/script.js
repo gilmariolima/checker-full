@@ -30,7 +30,10 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
   try {
     const backendURL = window.location.origin; // Detecta o domínio atual (Render)
-    const resp = await fetch(`${backendURL}/conferir_caixa`, { method:'POST', body:fd });
+    const resp = await fetch(`${window.location.origin}/conferir_caixa`, {
+      method: 'POST',
+      body: fd
+    });
     const dados = await resp.json();
     document.getElementById('progressArea').style.display = 'none';
 
@@ -176,4 +179,5 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
+
 
