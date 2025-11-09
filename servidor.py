@@ -14,12 +14,14 @@ from fastapi.responses import FileResponse
 # ==========================================================
 app = FastAPI()
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ==========================================================
 # 🌐 Servir o Frontend (HTML, CSS, JS e ícone)
@@ -729,4 +731,5 @@ async def conferir_caixa(
                 "tolerancia_hora": "±10min"
             }
         }
+
     }
