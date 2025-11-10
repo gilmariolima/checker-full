@@ -427,23 +427,12 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       }
     }
 
-
-
-
-
-
-
-
-
     
   } catch (e) {
     document.getElementById('progressArea').style.display = 'none';
     resEl.innerHTML = `<div class='alert alert-danger'>Erro: ${e.message}</div>`;
   }
 });
-
-
-
 
 document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('pdfFile').value = '';
@@ -455,9 +444,10 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('totalFaltaExcel').textContent = '0';
 });
 
-document.getElementById('btnExport').addEventListener('click', () => {
+
+document.getElementById('btnExport').addEventListener('click', async () => {
   const resultado = document.getElementById('resultado');
-  if (!resultado.innerHTML) return alert('Nada para exportar');
+  if (!resultado.innerHTML.trim()) return alert('Nada para exportar');
 
   const totalC = document.getElementById('totalConferidos').textContent;
   const totalP = document.getElementById('totalFaltaPdf').textContent;
@@ -466,15 +456,97 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const dataStr = hoje.toLocaleDateString('pt-BR');
   const nomeArquivo = `ConferenciaCaixa_${bancoDetectado || 'DESCONHECIDO'}_${hoje.toISOString().split('T')[0]}.pdf`;
 
-  const cabecalho = `
-    <div style='text-align:center;margin-bottom:20px;'>
-      <h2 style='color:#0a66c2;margin-bottom:4px;'>📊 Conferência de Caixa</h2>
-      <p style='margin:0;font-size:13px;color:#444;'>Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
-      <p style='margin:4px 0;font-size:13px;color:#555;'>Conferidos: ${totalC} • Falta PDF: ${totalP} • Falta Excel: ${totalE}</p>
-      <hr style='border:none;border-top:1px solid #ccc;margin:10px 0;'>
-    </div>`;
+  // 🧱 Clona o conteúdo
+  const clone = resultado.cloneNode(true);
 
-  const conteudoPDF = cabecalho + resultado.innerHTML;
-  const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
-  html2pdf().set(opt).from(conteudoPDF).save();
+  // remove botões e ícones interativos
+  clone.querySelectorAll('button, svg.bi-x-circle, svg.bi-check-circle').forEach(e => e.remove());
+
+  // cria um wrapper com estilo “modo impressão”
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <style>
+      * {
+        font-family: 'Arial', sans-serif !important;
+        color: #111 !important;
+        opacity: 1 !important;
+        background: none !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+      }
+
+      body, html, div {
+        background: #fff !important;
+        color: #111 !important;
+      }
+
+      .agent-card, .entry {
+        background: #fff !important;
+        border: 1px solid #ddd !important;
+      }
+
+      .agent-header {
+        background: #f3f6f9 !important;
+        border-bottom: 1px solid #ccc !important;
+        font-weight: bold !important;
+      }
+
+      h2, h3, h4, strong {
+        color: #000 !important;
+      }
+
+      .text-success { color: #0a6c2d !important; }
+      .text-warning { color: #b45309 !important; }
+      .text-danger { color: #a31515 !important; }
+      .text-primary { color: #0a66c2 !important; }
+
+      .fw-bold { font-weight: bold !important; }
+      .agent-card {
+        margin-bottom: 8px !important;
+        padding: 6px 10px !important;
+      }
+      .entry {
+        margin-bottom: 3px !important;
+        padding: 4px 6px !important;
+      }
+
+      .circle-wrap, .progress-ring, .circle-inner {
+        color: #0a66c2 !important;
+        background: #fff !important;
+      }
+
+      hr { border-top: 1px solid #bbb !important; }
+    </style>
+
+    <div style="text-align:center; margin-bottom:8px;">
+      <h2 style="color:#0a66c2; margin:0;">📊 Relatório de Conferência de Caixa</h2>
+      <p style="margin:2px 0; font-size:12px;">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
+      <p style="margin:2px 0; font-size:12px;">
+        ✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}
+      </p>
+      <hr>
+    </div>
+    ${clone.outerHTML}
+    <div style="text-align:center; margin-top:10px; font-size:10px; color:#444;">
+      © ${new Date().getFullYear()} Conferência de Caixa — Desenvolvido por <strong>Gilmario Lima</strong>
+    </div>
+  `;
+
+  // ✅ Gera PDF com fundo sólido e escala reduzida
+  const opt = {
+    margin: [0.2, 0.2, 0.3, 0.2],
+    filename: nomeArquivo,
+    html2canvas: {
+      scale: 1.1,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  };
+
+  html2pdf().set(opt).from(wrapper).save();
 });
+
+
