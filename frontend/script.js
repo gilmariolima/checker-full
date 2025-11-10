@@ -130,17 +130,14 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                         <small><strong>PDF:</strong> <em>não encontrado</em></small>
                       </div>
                     </div>
-                    <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
-                  </div>`).join('')}
-                  
-                    ${x.nome_similar ? `
-                      <div class="text-muted mt-1">
-                        <small>💬 Nome semelhante encontrado: '${x.nome_similar}' (Sim=${x.similaridade?.toFixed(2) ?? '?'})
-                        ${x.valor_similar ? `, valor diferente (${formatCurrency(x.valor_similar)})` : ''}</small>
-                      </div>
-                    ` : `
-                      <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
-                    `}
+                    ${
+                      x.nome_similar
+                        ? `<div class="text-muted mt-1">
+                             <small>💬 Nome semelhante encontrado: '${x.nome_similar}' (Sim=${x.similaridade?.toFixed(2) ?? '?'})
+                             ${x.valor_similar ? `, valor diferente (${formatCurrency(x.valor_similar)})` : ''}</small>
+                           </div>`
+                        : `<div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>`
+                    }
                   </div>
                 `).join('')}
 
@@ -203,6 +200,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
+
 
 
 
