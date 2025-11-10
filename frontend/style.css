@@ -57,6 +57,13 @@ body {
   margin-top: 10px;
 }
 
+
+.agent-suffix {
+  color: #004080;        /* Azul mais escuro */
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
 .chip {
   padding: 8px 12px;
   border-radius: 999px;
@@ -201,4 +208,5 @@ footer {
 .btn + .btn {
   margin-left: 5px;
 }
+
 
