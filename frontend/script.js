@@ -399,6 +399,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       // 🔵 Atualiza círculo de porcentagem
       try {
         // usa o ID do agente (vem do meta → sobe pro .agent-content → pega o id)
+        if (!meta) return; // <-- garante que meta existe
         const agentContent = meta.closest('.agent-content');
         if (!agentContent) return;
 
@@ -593,3 +594,4 @@ document.getElementById('btnExport').addEventListener('click', async () => {
 
   html2pdf().set(optDetalhado).from(wrapper).save();
 });
+
