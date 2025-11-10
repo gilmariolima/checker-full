@@ -106,20 +106,30 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                   </div>
                 </div>`).join('')}
 
-              <div class='fw-bold text-warning mt-3 mb-2'>⚠️ Faltando no PDF (${d.faltando_pdf.length})</div>
-              ${d.faltando_pdf.map(x => `
-                <div class='entry warn'>
-                  <strong>${x.nome}</strong>
-                  <div class="mt-1">
-                    <div><i class="bi bi-file-earmark-excel text-success"></i>
-                      <small><strong>Excel:</strong> ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora || '(sem hora)'}</small>
+              <div class='fw-bold text-warning mt-3 mb-2'>
+                  ⚠️ Faltando no PDF (${d.faltando_pdf.length})
+                </div>
+                ${d.faltando_pdf.map(x => `
+                  <div class='entry warn'>
+                    <div>
+                      <i class="bi bi-file-earmark-excel text-success"></i>
+                      <strong>Excel:</strong> ${x.nome_excel || x.nome} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora_excel || '(sem hora)'}
                     </div>
-                    <div><i class="bi bi-file-earmark-pdf text-danger"></i>
-                      <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                    <div>
+                      <i class="bi bi-file-earmark-pdf text-danger"></i>
+                      <strong>PDF:</strong> <em>não encontrado</em>
                     </div>
+                    ${x.nome_similar ? `
+                      <div class="text-muted mt-1">
+                        <small>💬 Nome semelhante encontrado: '${x.nome_similar}' (Sim=${x.similaridade?.toFixed(2) ?? '?'})
+                        ${x.valor_similar ? `, valor diferente (${formatCurrency(x.valor_similar)})` : ''}</small>
+                      </div>
+                    ` : `
+                      <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
+                    `}
                   </div>
-                  <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
-                </div>`).join('')}
+                `).join('')}
+
 
               <div class='fw-bold text-danger mt-3 mb-2'>❌ Faltando no Excel (${d.faltando_excel.length})</div>
               ${d.faltando_excel.map(x => `
@@ -179,5 +189,6 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
+
 
 
