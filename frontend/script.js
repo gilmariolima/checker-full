@@ -98,48 +98,74 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                   return agente;
                 })()}
               </span><br>
+
               <span class='agent-meta'>Conferidos: ${d.conferidos.length} • Falta PDF: ${d.faltando_pdf.length} • Falta Excel: ${d.faltando_excel.length}</span>
             </div>
             ${circle}
           </div>
           <div class='agent-content' id='${id}'>
             <div class='mt-3'>
-              <div class='fw-bold text-success mb-2'>✅ Conferidos (${d.conferidos.length})</div>
-              ${d.conferidos.map(x => `
-                <div class='entry ok'>
-                  <div class="fw-bold text-success mb-1">${x.nome_excel || x.nome}</div>
-                  <div class="mt-1 ps-1">
-                    <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
-                      <small><strong>Excel:</strong> ${x.nome_excel || '-'} — ${formatCurrency(x.valor_excel)} • ${x.hora_excel || '(sem hora)'}</small>
+              <div class='fw-bold text-success mb-2 conferidos-titulo'>
+                ✅ Conferidos (${d.conferidos.length}) — 
+                Total: <span class='total-conferidos'>${formatCurrency(
+                  d.conferidos.reduce((acc, x) => acc + (x.valor_excel || x.valor_pdf || 0), 0)
+                )}</span>
+              </div>
+              ${d.conferidos.map((x, idx) => `
+                <div class='entry ok' id='conferido_${id}_${idx}'>
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-bold text-success mb-1">${x.nome_excel || x.nome}</div>
+                      <div class="mt-1 ps-1">
+                        <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                          <small><strong>Excel:</strong> ${x.nome_excel || '-'} — ${formatCurrency(x.valor_excel)} • ${x.hora_excel || '(sem hora)'}</small>
+                        </div>
+                        <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                          <small><strong>PDF:</strong> ${x.nome_pdf || '-'} — ${formatCurrency(x.valor_pdf)} • ${x.hora_pdf || '(sem hora)'}</small>
+                        </div>
+                      </div>
                     </div>
-                    <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                      <small><strong>PDF:</strong> ${x.nome_pdf || '-'} — ${formatCurrency(x.valor_pdf)} • ${x.hora_pdf || '(sem hora)'}</small>
-                    </div>
+                    <!-- 🔴 Botão para desmarcar conferido -->
+                    <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
+                            data-agente="${agente}"
+                            data-nome="${x.nome_excel || x.nome}"
+                            data-valor="${x.valor_excel || x.valor_pdf || 0}"
+                            data-hora="${x.hora_excel || x.hora_pdf || ''}">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
                   </div>
-                </div>`).join('')}
+                </div>
+              `).join('')}
 
               <div class='fw-bold text-warning mt-3 mb-2'>⚠️ Faltando no PDF (${d.faltando_pdf.length})</div>
-                ${d.faltando_pdf.map(x => `
-                  <div class='entry warn'>
-                    <div class="fw-bold text-warning mb-1">${x.nome}</div>
-                    <div class="mt-1 ps-1">
-                      <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
-                        <small><strong>Excel:</strong> ${x.nome || '-'} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora || '(sem hora)'}</small>
+              ${d.faltando_pdf.map((x, idx) => `
+                <div class='entry warn' id='faltando_${id}_${idx}'>
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-bold text-warning mb-1">${x.nome}</div>
+                      <div class="mt-1 ps-1">
+                        <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                          <small><strong>Excel:</strong> ${x.nome || '-'} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora || '(sem hora)'}</small>
+                        </div>
+                        <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                          <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                        </div>
                       </div>
-                      <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                        <small><strong>PDF:</strong> <em>não encontrado</em></small>
-                      </div>
+                      <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
                     </div>
-                    ${
-                      x.nome_similar
-                        ? `<div class="text-muted mt-1">
-                             <small>💬 Nome semelhante encontrado: '${x.nome_similar}' (Sim=${x.similaridade?.toFixed(2) ?? '?'})
-                             ${x.valor_similar ? `, valor diferente (${formatCurrency(x.valor_similar)})` : ''}</small>
-                           </div>`
-                        : `<div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>`
-                    }
+
+                    <!-- 🟢 Botão para marcar como conferido -->
+                    <button class="btn btn-sm btn-outline-success marcar-conferido"
+                            data-agente="${agente}"
+                            data-nome="${x.nome}"
+                            data-valor="${x.valor_excel ?? x.valor}"
+                            data-hora="${x.hora}">
+                      <i class="bi bi-check-circle"></i>
+                    </button>
                   </div>
-                `).join('')}
+                </div>
+              `).join('')}
+
 
 
               <div class='fw-bold text-danger mt-3 mb-2'>❌ Faltando no Excel (${d.faltando_excel.length})</div>
@@ -161,11 +187,145 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
     });
 
     resEl.innerHTML = html;
+
+   // 🟢 Marcar item como conferido
+    document.querySelectorAll('.marcar-conferido').forEach(btn => {
+      btn.addEventListener('click', () => {
+        moverItem(btn, 'faltando', 'conferido');
+      });
+    });
+
+    // 🔴 Desmarcar item (voltar para faltando no PDF)
+    document.querySelectorAll('.desmarcar-conferido').forEach(btn => {
+      btn.addEventListener('click', () => {
+        moverItem(btn, 'conferido', 'faltando');
+      });
+    });
+
+    // 🔄 Função geral para mover itens entre listas
+    function moverItem(btn, origem, destino) {
+      const nome = btn.dataset.nome;
+      const valor = parseFloat(btn.dataset.valor || 0);
+      const hora = btn.dataset.hora || '(sem hora)';
+      const agente = btn.dataset.agente;
+      const agenteId = agente.replace(/\s+/g, '_');
+
+      // Remove o card da origem
+      const card = btn.closest(`.entry.${origem === 'conferido' ? 'ok' : 'warn'}`);
+      if (card) card.remove();
+
+      // Seleciona o container e contadores
+      const meta = document.querySelector(`#${agenteId} .agent-meta`);
+      const confTitulo = document.querySelector(`#${agenteId} .conferidos-titulo`);
+      const totalSpan = confTitulo?.querySelector('.total-conferidos');
+      const confCountMatch = confTitulo?.textContent.match(/Conferidos\s*\((\d+)\)/);
+      const confCount = confCountMatch ? parseInt(confCountMatch[1]) : 0;
+      const totalValor = parseFloat(totalSpan?.textContent.replace(/[^\d,.-]/g, '').replace(',', '.') || 0);
+
+      const faltandoTitulo = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
+      const faltandoMatch = faltandoTitulo?.textContent.match(/\((\d+)\)/);
+      const faltandoCount = faltandoMatch ? parseInt(faltandoMatch[1]) : 0;
+
+      if (destino === 'conferido') {
+        // ➕ Adiciona ao conferido
+        const confContainer = document.querySelector(`#${agenteId} .fw-bold.text-success`);
+        if (confContainer) {
+          const novo = document.createElement('div');
+          novo.className = 'entry ok';
+          novo.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-bold text-success mb-1">${nome}</div>
+                <div class="mt-1 ps-1">
+                  <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                    <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
+                  </div>
+                  <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                    <small><strong>PDF:</strong> <em>confirmado manualmente</em></small>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
+                      data-agente="${agente}" data-nome="${nome}"
+                      data-valor="${valor}" data-hora="${hora}">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </div>`;
+          confContainer.insertAdjacentElement('afterend', novo);
+          atualizarContadores(meta, confTitulo, faltandoTitulo, confCount + 1, faltandoCount - 1, valor, totalValor);
+          novo.querySelector('.desmarcar-conferido').addEventListener('click', () =>
+            moverItem(novo.querySelector('.desmarcar-conferido'), 'conferido', 'faltando'));
+        }
+      } else {
+        // ➖ Volta para faltando PDF
+        const faltContainer = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
+        if (faltContainer) {
+          const novo = document.createElement('div');
+          novo.className = 'entry warn';
+          novo.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-bold text-warning mb-1">${nome}</div>
+                <div class="mt-1 ps-1">
+                  <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                    <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
+                  </div>
+                  <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                    <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-outline-success marcar-conferido"
+                      data-agente="${agente}" data-nome="${nome}"
+                      data-valor="${valor}" data-hora="${hora}">
+                <i class="bi bi-check-circle"></i>
+              </button>
+            </div>`;
+          faltContainer.insertAdjacentElement('afterend', novo);
+          atualizarContadores(meta, confTitulo, faltandoTitulo, confCount - 1, faltandoCount + 1, -valor, totalValor);
+          novo.querySelector('.marcar-conferido').addEventListener('click', () =>
+            moverItem(novo.querySelector('.marcar-conferido'), 'faltando', 'conferido'));
+        }
+      }
+    }
+
+
+    // 🧮 Atualiza contadores e total dinamicamente
+    function atualizarContadores(meta, confTitulo, faltandoTitulo, confCount, faltandoCount, valorDelta, totalAtual) {
+      // Atualiza linha meta
+      const metaText = meta?.textContent;
+      if (metaText) {
+        const match = metaText.match(/Conferidos:\s*(\d+)\s*•\s*Falta PDF:\s*(\d+)\s*•\s*Falta Excel:\s*(\d+)/);
+        if (match) {
+          const faltaExcel = parseInt(match[3]);
+          meta.textContent = `Conferidos: ${Math.max(0, confCount)} • Falta PDF: ${Math.max(0, faltandoCount)} • Falta Excel: ${faltaExcel}`;
+        }
+      }
+
+      // Atualiza total e contador de conferidos
+      const totalSpan = confTitulo.querySelector('.total-conferidos');
+      const novoTotal = Math.max(0, totalAtual + valorDelta);
+      totalSpan.textContent = formatCurrency(novoTotal);
+      confTitulo.innerHTML = `✅ Conferidos (${Math.max(0, confCount)}) — Total: <span class='total-conferidos'>${formatCurrency(novoTotal)}</span>`;
+
+      // Atualiza contador de faltando no PDF
+      if (faltandoTitulo) {
+        faltandoTitulo.innerHTML = `⚠️ Faltando no PDF (${Math.max(0, faltandoCount)})`;
+      }
+    }
+
+
+
+
+
+
+    
   } catch (e) {
     document.getElementById('progressArea').style.display = 'none';
     resEl.innerHTML = `<div class='alert alert-danger'>Erro: ${e.message}</div>`;
   }
 });
+
 
 document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('pdfFile').value = '';
@@ -200,6 +360,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
+
 
 
 
