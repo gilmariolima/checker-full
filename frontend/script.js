@@ -202,6 +202,87 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       });
     });
 
+
+
+    // Recalcula contadores, soma total dos "conferidos" e atualiza o círculo de progresso
+    function recalcAndRenderAgent(agenteId) {
+      try {
+        // agenteId exemplo: "GILMARIO_LIMA" — corresponde ao id do .agent-content
+        const agentContent = document.getElementById(agenteId);
+        if (!agentContent) return;
+
+        const agentCard = agentContent.closest('.agent-card');
+        if (!agentCard) return;
+
+        // contar entradas
+        const conferidosEls = agentCard.querySelectorAll('.entry.ok');
+        const faltandoEls = agentCard.querySelectorAll('.entry.warn');
+        const faltaExcelEls = agentCard.querySelectorAll('.entry.err');
+
+        const conferidosCount = conferidosEls.length;
+        const faltandoCount = faltandoEls.length;
+        const faltaExcelCount = faltaExcelEls.length;
+
+        // somar valores dos conferidos: tenta extrair R$ XX,XX do texto de cada entry.ok
+        let totalValor = 0;
+        conferidosEls.forEach(el => {
+          // procura primeiro "R$ x.xxx,xx" no texto do elemento
+          const txt = el.innerText || '';
+          const m = txt.match(/R\$[\s]*([\d\.\,]+)/);
+          if (m && m[1]) {
+            const numStr = m[1].trim().replace(/\./g, '').replace(',', '.'); // 1.234,56 -> 1234.56
+            const n = parseFloat(numStr) || 0;
+            totalValor += n;
+          } else {
+            // fallback: checa atributo data-valor se existir
+            const dv = el.dataset && el.dataset.valor;
+            if (dv) totalValor += parseFloat(dv) || 0;
+          }
+        });
+
+        // atualizar meta (linha pequena abaixo do nome do agente)
+        const metaEl = agentCard.querySelector('.agent-meta');
+        if (metaEl) {
+          metaEl.textContent = `Conferidos: ${conferidosCount} • Falta PDF: ${faltandoCount} • Falta Excel: ${faltaExcelCount}`;
+        }
+
+        // atualizar título de conferidos e total
+        const confTituloEl = agentCard.querySelector('.conferidos-titulo');
+        if (confTituloEl) {
+          const totalFormatted = formatCurrency(totalValor);
+          confTituloEl.innerHTML = `✅ Conferidos (${conferidosCount}) — Total: <span class='total-conferidos'>${totalFormatted}</span>`;
+        }
+
+        // atualizar contador amarelo (faltando)
+        const faltTituloEl = agentCard.querySelector('.fw-bold.text-warning');
+        if (faltTituloEl) {
+          faltTituloEl.innerHTML = `⚠️ Faltando no PDF (${faltandoCount})`;
+        }
+
+        // atualizar círculo de progresso (percentual)
+        const totalItens = Math.max(1, conferidosCount + faltandoCount + faltaExcelCount);
+        const perc = Math.round((conferidosCount / totalItens) * 100);
+
+        // pega o segundo circle (o visível) e o .circle-inner
+        const circles = agentCard.querySelectorAll('.progress-ring circle');
+        const circle = circles.length > 1 ? circles[1] : circles[0];
+        const inner = agentCard.querySelector('.circle-inner');
+
+        if (circle && inner) {
+          const r = parseFloat(circle.getAttribute('r')) || 16;
+          const circ = 2 * Math.PI * r;
+          const offset = ((1 - perc / 100) * circ).toFixed(2);
+          circle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.3s ease';
+          circle.setAttribute('stroke-dashoffset', offset);
+          circle.setAttribute('stroke', perc === 100 ? '#16a34a' : '#0a66c2');
+          inner.textContent = `${perc}%`;
+        }
+      } catch (err) {
+        console.warn('recalcAndRenderAgent erro:', err);
+      }
+    }
+
+
     // 🔄 Função geral para mover itens entre listas
     function moverItem(btn, origem, destino) {
       const nome = btn.dataset.nome;
@@ -287,6 +368,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             moverItem(novo.querySelector('.marcar-conferido'), 'faltando', 'conferido'));
         }
       }
+      recalcAndRenderAgent(agenteId);
     }
 
 
@@ -294,10 +376,11 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
     function atualizarContadores(meta, confTitulo, faltandoTitulo, confCount, faltandoCount, valorDelta, totalAtual) {
       // Atualiza linha meta
       const metaText = meta?.textContent;
+      let faltaExcel = 0;
       if (metaText) {
         const match = metaText.match(/Conferidos:\s*(\d+)\s*•\s*Falta PDF:\s*(\d+)\s*•\s*Falta Excel:\s*(\d+)/);
         if (match) {
-          const faltaExcel = parseInt(match[3]);
+          faltaExcel = parseInt(match[3]);
           meta.textContent = `Conferidos: ${Math.max(0, confCount)} • Falta PDF: ${Math.max(0, faltandoCount)} • Falta Excel: ${faltaExcel}`;
         }
       }
@@ -312,7 +395,40 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       if (faltandoTitulo) {
         faltandoTitulo.innerHTML = `⚠️ Faltando no PDF (${Math.max(0, faltandoCount)})`;
       }
+
+      // 🔵 Atualiza círculo de porcentagem
+      try {
+        // usa o ID do agente (vem do meta → sobe pro .agent-content → pega o id)
+        const agentContent = meta.closest('.agent-content');
+        if (!agentContent) return;
+
+        const agenteId = agentContent.id; // ex: GILMARIO_LIMA
+        const agentCard = document.querySelector(`#${agenteId}`).closest('.agent-card');
+        if (!agentCard) return;
+
+        const total = Math.max(1, confCount + faltandoCount + faltaExcel);
+        const perc = Math.round((confCount / total) * 100);
+
+        const circles = agentCard.querySelectorAll('.progress-ring circle');
+        const circle = circles[circles.length - 1]; // o círculo ativo (segundo)
+        const inner = agentCard.querySelector('.circle-inner');
+
+        if (circle && inner) {
+          const r = 16;
+          const circ = 2 * Math.PI * r;
+          const offset = ((1 - perc / 100) * circ).toFixed(2);
+          circle.style.transition = 'stroke-dashoffset 0.3s ease';
+          circle.setAttribute('stroke-dashoffset', offset);
+          circle.setAttribute('stroke', perc === 100 ? '#16a34a' : '#0a66c2');
+          inner.textContent = `${perc}%`;
+        }
+      } catch (err) {
+        console.warn('Erro ao atualizar círculo:', err);
+      }
     }
+
+
+
 
 
 
@@ -325,6 +441,8 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
     resEl.innerHTML = `<div class='alert alert-danger'>Erro: ${e.message}</div>`;
   }
 });
+
+
 
 
 document.getElementById('btnLimpar').addEventListener('click', () => {
@@ -360,9 +478,3 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
-
-
-
-
-
-
