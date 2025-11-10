@@ -85,7 +85,19 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
         <div class='agent-card'>
           <div class='agent-header' onclick='toggleAgent("${id}")'>
             <div>
-              <span class='agent-name'><i class='bi bi-person-circle'></i> ${agente}</span><br>
+              <span class='agent-name'>
+                <i class='bi bi-person-circle'></i>
+                ${(() => {
+                  // separa sufixos conhecidos e colore
+                  const match = agente.match(/^(.*?)(?:\s*-\s*|\s+)(SUPORTE\s+ONLINE|VALE\s+VIAGENS|TOP\s+VIAGENS|AG[ÊE]NCIA|VALE\s+AG[ÊE]NCIA)$/i);
+                  if (match) {
+                    const nomeBase = match[1].trim();
+                    const sufixo = match[2].trim();
+                    return `${nomeBase} <span class='agent-suffix'>- ${sufixo}</span>`;
+                  }
+                  return agente;
+                })()}
+              </span><br>
               <span class='agent-meta'>Conferidos: ${d.conferidos.length} • Falta PDF: ${d.faltando_pdf.length} • Falta Excel: ${d.faltando_excel.length}</span>
             </div>
             ${circle}
@@ -106,19 +118,21 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                   </div>
                 </div>`).join('')}
 
-              <div class='fw-bold text-warning mt-3 mb-2'>
-                  ⚠️ Faltando no PDF (${d.faltando_pdf.length})
-                </div>
+              <div class='fw-bold text-warning mt-3 mb-2'>⚠️ Faltando no PDF (${d.faltando_pdf.length})</div>
                 ${d.faltando_pdf.map(x => `
                   <div class='entry warn'>
-                    <div>
-                      <i class="bi bi-file-earmark-excel text-success"></i>
-                      <strong>Excel:</strong> ${x.nome_excel || x.nome} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora_excel || '(sem hora)'}
+                    <div class="fw-bold text-warning mb-1">${x.nome}</div>
+                    <div class="mt-1 ps-1">
+                      <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                        <small><strong>Excel:</strong> ${x.nome || '-'} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora || '(sem hora)'}</small>
+                      </div>
+                      <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                        <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                      </div>
                     </div>
-                    <div>
-                      <i class="bi bi-file-earmark-pdf text-danger"></i>
-                      <strong>PDF:</strong> <em>não encontrado</em>
-                    </div>
+                    <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
+                  </div>`).join('')}
+                  
                     ${x.nome_similar ? `
                       <div class="text-muted mt-1">
                         <small>💬 Nome semelhante encontrado: '${x.nome_similar}' (Sim=${x.similaridade?.toFixed(2) ?? '?'})
@@ -189,6 +203,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const opt = { margin: 0.5, filename: nomeArquivo, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
   html2pdf().set(opt).from(conteudoPDF).save();
 });
+
 
 
 
