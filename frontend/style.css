@@ -116,7 +116,7 @@ body {
 }
 
 .entry.warn {
-  background-color: #fff8e1;        /* amarelo suave */
+  background-color: #fffcf3;        /* amarelo suave */
   border-left: 4px solid #ffc107;   /* borda amarela */
   border-radius: 10px;
   padding: 10px 14px;
@@ -124,7 +124,7 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 .entry.warn:hover {
-  background-color: #fff3cd;
+  background-color: #fffcf3;
 }
 
 
@@ -225,6 +225,7 @@ footer {
 .btn + .btn {
   margin-left: 5px;
 }
+
 
 
 
