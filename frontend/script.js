@@ -457,89 +457,67 @@ document.getElementById('btnExport').addEventListener('click', async () => {
   const dataStr = hoje.toLocaleDateString('pt-BR');
   const nomeBase = `ConferenciaCaixa_${bancoDetectado || 'DESCONHECIDO'}_${hoje.toISOString().split('T')[0]}`;
 
-  // 🧩 Escolha do tipo de relatório
-  const tipo = confirm("Deseja exportar o RELATÓRIO DETALHADO?\n\nClique em 'OK' para Detalhado.\nClique em 'Cancelar' para o Resumo por Agente.")
-    ? 'detalhado' : 'resumo';
+  // ==========================================================
+  // 📊 GERAR RESUMO POR AGENTE
+  // ==========================================================
+  const agentes = Array.from(document.querySelectorAll('.agent-card'));
+  const dadosResumo = agentes.map(card => {
+    const nome = card.querySelector('.agent-name')?.textContent.trim() || 'Sem Agente';
+    const meta = card.querySelector('.agent-meta')?.textContent || '';
+    const matchC = meta.match(/Conferidos:\s*(\d+)/);
+    const matchP = meta.match(/Falta PDF:\s*(\d+)/);
+    const matchE = meta.match(/Falta Excel:\s*(\d+)/);
+    const conferidos = parseInt(matchC?.[1] || 0);
+    const faltaPdf = parseInt(matchP?.[1] || 0);
+    const faltaExcel = parseInt(matchE?.[1] || 0);
+    const totalSpan = card.querySelector('.total-conferidos');
+    const totalValor = totalSpan ? totalSpan.textContent.trim() : 'R$ 0,00';
+    const perc = card.querySelector('.circle-inner')?.textContent.trim() || '0%';
+    return { nome, conferidos, faltaPdf, faltaExcel, totalValor, perc };
+  });
 
-  if (tipo === 'resumo') {
-    // ===============================================
-    // 📊 GERAR RELATÓRIO RESUMIDO POR AGENTE
-    // ===============================================
-    const agentes = Array.from(document.querySelectorAll('.agent-card'));
-    const dadosResumo = agentes.map(card => {
-      const nome = card.querySelector('.agent-name')?.textContent.trim() || 'Sem Agente';
-      const meta = card.querySelector('.agent-meta')?.textContent || '';
-      const matchC = meta.match(/Conferidos:\s*(\d+)/);
-      const matchP = meta.match(/Falta PDF:\s*(\d+)/);
-      const matchE = meta.match(/Falta Excel:\s*(\d+)/);
-      const conferidos = parseInt(matchC?.[1] || 0);
-      const faltaPdf = parseInt(matchP?.[1] || 0);
-      const faltaExcel = parseInt(matchE?.[1] || 0);
-      const totalSpan = card.querySelector('.total-conferidos');
-      const totalValor = totalSpan ? totalSpan.textContent.trim() : 'R$ 0,00';
-      const perc = card.querySelector('.circle-inner')?.textContent.trim() || '0%';
-      return { nome, conferidos, faltaPdf, faltaExcel, totalValor, perc };
-    });
+  const linhas = dadosResumo.map(a => `
+    <tr>
+      <td>${a.nome}</td>
+      <td style="text-align:center;">${a.conferidos}</td>
+      <td style="text-align:center;">${a.faltaPdf}</td>
+      <td style="text-align:center;">${a.faltaExcel}</td>
+      <td style="text-align:right;">${a.totalValor}</td>
+      <td style="text-align:center;">${a.perc}</td>
+    </tr>`).join('');
 
-    // Monta tabela HTML
-    const linhas = dadosResumo.map(a => `
-      <tr>
-        <td>${a.nome}</td>
-        <td style="text-align:center;">${a.conferidos}</td>
-        <td style="text-align:center;">${a.faltaPdf}</td>
-        <td style="text-align:center;">${a.faltaExcel}</td>
-        <td style="text-align:right;">${a.totalValor}</td>
-        <td style="text-align:center;">${a.perc}</td>
-      </tr>`).join('');
+  const resumoHTML = `
+    <div style="text-align:center; margin-bottom:10px;">
+      <h2 style="color:#0a66c2; margin:0;">📊 Resumo de Conferência de Caixa</h2>
+      <p style="margin:2px 0; font-size:12px;">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
+      <p style="margin:2px 0; font-size:12px;">
+        ✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}
+      </p>
+      <hr>
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+      <thead>
+        <tr style="background:#0a66c2; color:#fff;">
+          <th>Agente</th><th>Conferidos</th><th>Falta PDF</th><th>Falta Excel</th><th>Total (R$)</th><th>%</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <hr style="margin:15px 0;">`;
 
-    const resumoHTML = `
-      <style>
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #ccc; padding: 6px; }
-        th { background: #0a66c2; color: #fff; }
-        td { background: #fff; color: #111; }
-      </style>
-      <div style="text-align:center; margin-bottom:10px;">
-        <h2 style="color:#0a66c2; margin:0;">📊 Resumo de Conferência de Caixa</h2>
-        <p style="margin:2px 0; font-size:12px;">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
-        <p style="margin:2px 0; font-size:12px;">
-          ✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}
-        </p>
-        <hr>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Agente</th>
-            <th>Conferidos</th>
-            <th>Falta PDF</th>
-            <th>Falta Excel</th>
-            <th>Total (R$)</th>
-            <th>%</th>
-          </tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-      </table>
-      <div style="text-align:center; margin-top:10px; font-size:10px; color:#444;">
-        © ${new Date().getFullYear()} Conferência de Caixa — Desenvolvido por <strong>Gilmario Lima</strong>
-      </div>`;
-
-    const optResumo = {
-      margin: [0.3, 0.3, 0.4, 0.3],
-      filename: nomeBase + '_Resumo.pdf',
-      html2canvas: { scale: 1.2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-    };
-
-    html2pdf().set(optResumo).from(resumoHTML).save();
-    return;
-  }
-
-  // ===============================================
+  // ==========================================================
   // 📋 GERAR RELATÓRIO DETALHADO
-  // ===============================================
+  // ==========================================================
   const clone = resultado.cloneNode(true);
   clone.querySelectorAll('button').forEach(e => e.remove()); // remove botões
+
+  // 🔧 Garante que todas as seções de agentes fiquem visíveis no PDF
+  clone.querySelectorAll('.agent-content').forEach(el => {
+    el.classList.add('show');
+    el.style.display = 'block';
+    el.style.opacity = '1';
+    el.style.maxHeight = 'none';
+  });
 
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
@@ -551,6 +529,10 @@ document.getElementById('btnExport').addEventListener('click', async () => {
         opacity: 1 !important;
         box-shadow: none !important;
       }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ccc; padding: 6px; }
+      th { background: #0a66c2; color: #fff; }
+      td { background: #fff; color: #111; }
       .agent-card, .entry {
         background: #fff !important;
         border: 1px solid #ddd !important;
@@ -570,28 +552,28 @@ document.getElementById('btnExport').addEventListener('click', async () => {
       .circle-inner { color:#0a66c2 !important; font-weight:bold; }
     </style>
 
+    ${resumoHTML}
+
     <div style="text-align:center; margin-bottom:8px;">
-      <h2 style="color:#0a66c2; margin:0;">📄 Relatório de Conferência de Caixa</h2>
-      <p style="margin:2px 0; font-size:12px;">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
-      <p style="margin:2px 0; font-size:12px;">
-        ✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}
-      </p>
-      <hr>
+      <h3 style="color:#0a66c2; margin:0;">📄 Detalhamento Completo</h3>
     </div>
+
     ${clone.outerHTML}
+
     <div style="text-align:center; margin-top:10px; font-size:10px; color:#444;">
       © ${new Date().getFullYear()} Conferência de Caixa — Desenvolvido por <strong>Gilmario Lima</strong>
     </div>
   `;
 
-  const optDetalhado = {
-    margin: [0.2, 0.2, 0.3, 0.2],
-    filename: nomeBase + '_Detalhado.pdf',
+  const optFinal = {
+    margin: [0.3, 0.3, 0.4, 0.3],
+    filename: nomeBase + '_Completo.pdf',
     html2canvas: { scale: 1.1, useCORS: true, backgroundColor: '#ffffff' },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
     pagebreak: { mode: ['css', 'legacy'] }
   };
 
-  html2pdf().set(optDetalhado).from(wrapper).save();
+  html2pdf().set(optFinal).from(wrapper).save();
 });
+
 
