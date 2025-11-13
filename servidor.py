@@ -760,17 +760,22 @@ async def conferir_caixa(
                     possivel = p
 
             motivo = "Nenhum parecido encontrado no PDF."
+            banco_possivel = pdf_resp.get("banco", "")
             if possivel:
-                dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
-                val_msg = "igual" if dif < 0.01 else ("próximo" if dif < 0.20 else "diferente")
+                val_dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
+                val_msg = "igual" if val_dif < 0.01 else ("próximo" if val_dif < 0.20 else "diferente")
                 motivo = (
                     f"Nome semelhante encontrado: '{possivel.get('nome')}' "
                     f"(Sim={melhor_sim:.2f}), valor {val_msg} "
                     f"(R${(possivel.get('valor') or 0):.2f})."
                 )
+                banco_possivel = possivel.get("banco", banco_possivel)
 
             item["motivo"] = motivo
+            item["banco"] = banco_possivel or pdf_resp.get("banco", "")
+            item["banco_possivel"] = banco_possivel
             faltando_no_pdf.append(item)
+
 
     # ==========================================================
     # 4.2️⃣ PDF → Excel (sobras do PDF)
