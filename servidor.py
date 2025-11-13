@@ -315,7 +315,13 @@ async def detalhe_bb(file_bytes: bytes):
 
         nome = nome_limpo
 
-        dados.append({"data": data, "hora": hora, "nome": nome, "valor": valor})
+        dados.append({
+            "data": data,
+            "hora": hora,
+            "nome": nome,
+            "valor": valor,
+            "banco": "BB"
+        })
 
     # ==========================================================
     # 🧾 Captura complementar: PIX com CNPJ (sem nome)
@@ -812,4 +818,5 @@ async def conferir_caixa(
             }
         }
     }
+
 
