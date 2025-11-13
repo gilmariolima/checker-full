@@ -722,6 +722,8 @@ async def conferir_caixa(
                     "usado": usado
                 })
 
+            
+
         if candidatos:
             candidatos = sorted(
                 candidatos,
@@ -747,8 +749,7 @@ async def conferir_caixa(
                 "data_pdf": escolhido["data_pdf"].strftime("%d/%m/%Y") if escolhido["data_pdf"] else "",
                 "similaridade": round(escolhido["sim"], 2),
                 "analise": "ok",
-                "banco": dados_pdf[escolhido["idx"]].get("banco")  # 🔥 aqui
-
+                "banco": dados_pdf[escolhido["idx"]].get("banco")  # ok
             })
         else:
             possivel = None
@@ -760,7 +761,8 @@ async def conferir_caixa(
                     possivel = p
 
             motivo = "Nenhum parecido encontrado no PDF."
-            banco_possivel = pdf_resp.get("banco", "")
+            # --- CORREÇÃO AQUI: NÃO USAR pdf_resp (fora do escopo) ---
+            banco_possivel = ""
             if possivel:
                 val_dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
                 val_msg = "igual" if val_dif < 0.01 else ("próximo" if val_dif < 0.20 else "diferente")
@@ -769,12 +771,14 @@ async def conferir_caixa(
                     f"(Sim={melhor_sim:.2f}), valor {val_msg} "
                     f"(R${(possivel.get('valor') or 0):.2f})."
                 )
-                banco_possivel = possivel.get("banco", banco_possivel)
+                banco_possivel = possivel.get("banco", "") or ""
 
+            # preferir banco do 'possivel', senão manter qualquer banco já no item, senão vazio
             item["motivo"] = motivo
-            item["banco"] = banco_possivel or pdf_resp.get("banco", "")
             item["banco_possivel"] = banco_possivel
+            item["banco"] = banco_possivel or item.get("banco", "") or ""
             faltando_no_pdf.append(item)
+
 
 
     # ==========================================================
@@ -808,3 +812,4 @@ async def conferir_caixa(
             }
         }
     }
+
