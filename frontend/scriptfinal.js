@@ -10,6 +10,15 @@ function formatCurrency(v) {
   }
 }
 
+
+function badgeBanco(b) {
+  if (!b) return "";
+  b = b.toUpperCase();
+  if (b.includes("BB")) return `<span class="bank-badge badge-bb">BB</span>`;
+  if (b.includes("C6")) return `<span class="bank-badge badge-c6">C6</span>`;
+  return "";
+}
+
 let bancoDetectado = '';
 
 document.getElementById('btnConferir').addEventListener('click', async () => {
@@ -105,88 +114,177 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
           </div>
           <div class='agent-content' id='${id}'>
             <div class='mt-3'>
+
+              <!-- ================= CONFIRMADOS ================= -->
               <div class='fw-bold text-success mb-2 conferidos-titulo'>
                 ✅ Conferidos (${d.conferidos.length}) — 
-                Total: <span class='total-conferidos'>${formatCurrency(
-                  d.conferidos.reduce((acc, x) => acc + (x.valor_excel || x.valor_pdf || 0), 0)
-                )}</span>
+                Total: <span class='total-conferidos'>
+                  ${formatCurrency(
+                    d.conferidos.reduce((acc, x) => acc + (x.valor_excel || x.valor_pdf || 0), 0)
+                  )}
+                </span>
               </div>
-              ${d.conferidos.map((x, idx) => `
-                <div class='entry ok' id='conferido_${id}_${idx}'>
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                      <div class="fw-bold text-success mb-1">${x.nome_excel || x.nome}</div>
-                      <div class="mt-1 ps-1">
-                        <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
-                          <small><strong>Excel:</strong> ${x.nome_excel || '-'} — ${formatCurrency(x.valor_excel)} • ${x.hora_excel || '(sem hora)'}</small>
-                        </div>
-                        <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                          <small><strong>PDF:</strong> ${x.nome_pdf || '-'} — ${formatCurrency(x.valor_pdf)} • ${x.hora_pdf || '(sem hora)'}</small>
-                        </div>
+
+              ${d.conferidos
+                .map(
+                  (x, idx) => `
+              <div class='entry ok' id='conferido_${id}_${idx}'>
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-bold text-success mb-1">
+                      ${badgeBanco(x.banco_pdf || x.banco)}
+                      ${x.nome_excel || x.nome}
+                    </div>
+
+                    <div class="mt-1 ps-1">
+                      <div>
+                        <i class="bi bi-file-earmark-excel text-success me-1"></i>
+                        <small><strong>Excel:</strong> ${x.nome_excel} — ${formatCurrency(x.valor_excel)} • ${x.hora_excel}</small>
+                      </div>
+
+                      <div>
+                        <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                        <small><strong>PDF:</strong> ${badgeBanco(x.banco_pdf)} ${x.nome_pdf} — ${formatCurrency(x.valor_pdf)} • ${x.hora_pdf}</small>
                       </div>
                     </div>
-                    <!-- 🔴 Botão para desmarcar conferido -->
-                    <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
-                            data-agente="${agente}"
-                            data-nome="${x.nome_excel || x.nome}"
-                            data-valor="${x.valor_excel || x.valor_pdf || 0}"
-                            data-hora="${x.hora_excel || x.hora_pdf || ''}">
-                      <i class="bi bi-x-circle"></i>
-                    </button>
                   </div>
-                </div>
-              `).join('')}
 
-              <div class='fw-bold text-warning mt-3 mb-2'>⚠️ Faltando no PDF (${d.faltando_pdf.length})</div>
-              ${d.faltando_pdf.map((x, idx) => `
-                <div class='entry warn' id='faltando_${id}_${idx}'>
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                      <div class="fw-bold text-warning mb-1">${x.nome}</div>
-                      <div class="mt-1 ps-1">
-                        <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
-                          <small><strong>Excel:</strong> ${x.nome || '-'} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora || '(sem hora)'}</small>
-                        </div>
-                        <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                          <small><strong>PDF:</strong> <em>não encontrado</em></small>
-                        </div>
+                  <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
+                        data-agente="${agente}"
+                        data-nome="${x.nome_excel || x.nome}"
+                        data-valor="${x.valor_excel || x.valor_pdf}"
+                        data-hora="${x.hora_excel || x.hora_pdf}"
+                        data-banco="${x.banco_pdf || x.banco || ''}">
+                  <i class="bi bi-x-circle"></i>
+                </button>
+
+                </div>
+              </div>`
+                )
+                .join("")}
+
+
+              <!-- ================= FALTANDO NO PDF ================= -->
+              <div class='fw-bold text-warning mt-3 mb-2'>
+                ⚠️ Faltando no PDF (${d.faltando_pdf.length})
+              </div>
+
+              ${d.faltando_pdf
+                .map(
+                  (x, idx) => `
+              <div class='entry warn' id='faltando_${id}_${idx}'>
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-bold text-warning mb-1">
+                      ${badgeBanco(x.banco_possivel)}
+                      ${x.nome}
+                    </div>
+
+                    <div class="mt-1 ps-1">
+                      <div>
+                        <i class="bi bi-file-earmark-excel text-success me-1"></i>
+                        <small><strong>Excel:</strong> ${badgeBanco(x.banco_possivel)} ${x.nome} — ${formatCurrency(x.valor_excel ?? x.valor)} • ${x.hora}</small>
                       </div>
-                      <div class="text-muted mt-1"><small>💬 ${x.motivo || 'Sem motivo registrado.'}</small></div>
+
+                      <div>
+                        <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                        <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                      </div>
                     </div>
 
-                    <!-- 🟢 Botão para marcar como conferido -->
-                    <button class="btn btn-sm btn-outline-success marcar-conferido"
-                            data-agente="${agente}"
-                            data-nome="${x.nome}"
-                            data-valor="${x.valor_excel ?? x.valor}"
-                            data-hora="${x.hora}">
-                      <i class="bi bi-check-circle"></i>
-                    </button>
+                    <div class="text-muted mt-1">
+                      <small>💬 ${x.motivo}</small>
+                    </div>
+                  </div>
+
+                  <button class="btn btn-sm btn-outline-success marcar-conferido"
+                    data-agente="${agente}"
+                    data-nome="${x.nome}"
+                    data-valor="${x.valor_excel ?? x.valor}"
+                    data-hora="${x.hora}">
+                    <i class="bi bi-check-circle"></i>
+                  </button>
+                </div>
+              </div>`
+                )
+                .join("")}
+
+
+
+              <!-- ================= FALTANDO NO EXCEL ================= -->
+              <div class='fw-bold text-danger mt-3 mb-2'>
+                ❌ Faltando no Excel (${d.faltando_excel.length})
+              </div>
+
+              ${d.faltando_excel
+                .map(
+                  (x) => `
+              <div class='entry err'>
+                <strong>
+                  ${badgeBanco(x.banco)}
+                  ${x.nome}
+                </strong>
+
+                <div class="mt-1">
+                  <div>
+                    <i class="bi bi-file-earmark-excel text-success"></i>
+                    <small><strong>Excel:</strong> <em>não encontrado</em></small>
+                  </div>
+
+                  <div>
+                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                    <small>
+                      <strong>PDF:</strong> ${formatCurrency(x.valor)} • ${x.hora}
+                    </small>
                   </div>
                 </div>
-              `).join('')}
-
-
-
-              <div class='fw-bold text-danger mt-3 mb-2'>❌ Faltando no Excel (${d.faltando_excel.length})</div>
-              ${d.faltando_excel.map(x => `
-                <div class='entry err'>
-                  <strong>${x.nome}</strong>
-                  <div class="mt-1">
-                    <div><i class="bi bi-file-earmark-excel text-success"></i>
-                      <small><strong>Excel:</strong> <em>não encontrado</em></small>
-                    </div>
-                    <div><i class="bi bi-file-earmark-pdf text-danger"></i>
-                      <small><strong>PDF:</strong> ${formatCurrency(x.valor)} • ${x.hora || '(sem hora)'}</small>
-                    </div>
-                  </div>
-                </div>`).join('')}
+              </div>`
+                )
+                .join("")}
             </div>
           </div>
         </div>`;
     });
 
+    
+
+
     resEl.innerHTML = html;
+
+    // 🔧 Ajuste visual para o agente "Sem Agente"
+    document.querySelectorAll('.agent-card').forEach(card => {
+      const agentName = card.querySelector('.agent-name')?.textContent.trim().toLowerCase() || '';
+
+      if (agentName !== 'sem agente') {
+        card.querySelectorAll('.fw-bold.text-danger, .entry.err').forEach(el => el.remove());
+      } else {
+        // Remove tudo que é de conferidos ou faltando PDF
+        card.querySelectorAll('.fw-bold.text-success, .entry.ok, .fw-bold.text-warning, .entry.warn').forEach(el => el.remove());
+
+        // Remove o título vermelho padrão "Faltando no Excel (X)"
+        card.querySelectorAll('.fw-bold.text-danger').forEach(el => el.remove());
+        card.querySelectorAll('.entry.err .titulo').forEach(el => el.remove());
+
+        const faltandoExcelCount = card.querySelectorAll('.entry.err').length;
+
+        const header = card.querySelector('.agent-header');
+        if (header) {
+          header.innerHTML = `
+            <div class="fw-bold" style="color:#a31515; font-size:1.1rem;">
+              ❌ FALTANDO EXCEL : ${faltandoExcelCount}
+            </div>
+          `;
+        }
+
+  const meta = card.querySelector('.agent-meta');
+  if (meta) meta.remove();
+}
+
+
+    });
+
+
+
 
    // 🟢 Marcar item como conferido
     document.querySelectorAll('.marcar-conferido').forEach(btn => {
@@ -282,94 +380,229 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       }
     }
 
+    function calcularSimilaridade(a, b) {
+      if (!a || !b) return 0;
+      a = a.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      b = b.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const matches = a.split("").filter(c => b.includes(c)).length;
+      return matches / Math.max(a.length, b.length);
+    }
 
-    // 🔄 Função geral para mover itens entre listas
+
+
+    // 🔄 Função geral para mover itens entre listas (com limpeza automática no "Faltando Excel")
     function moverItem(btn, origem, destino) {
-      const nome = btn.dataset.nome;
+
+      const nome = btn.dataset.nome?.trim() || "";
       const valor = parseFloat(btn.dataset.valor || 0);
-      const hora = btn.dataset.hora || '(sem hora)';
+      const hora = btn.dataset.hora || "(sem hora)";
       const agente = btn.dataset.agente;
-      const agenteId = agente.replace(/\s+/g, '_');
+      const banco = btn.dataset.banco || "";
+      const agenteId = agente.replace(/\s+/g, "_");
 
-      // Remove o card da origem
-      const card = btn.closest(`.entry.${origem === 'conferido' ? 'ok' : 'warn'}`);
-      if (card) card.remove();
+      // Capturar motivo antes de remover
+      const card = btn.closest(`.entry.${origem === "conferido" ? "ok" : "warn"}`);
+      let motivoRaw = "";
+      if (card) {
+        motivoRaw = card.querySelector(".text-muted small")?.textContent || "";
+        card.remove();
+      }
 
-      // Seleciona o container e contadores
+      // Seletores principais
       const meta = document.querySelector(`#${agenteId} .agent-meta`);
       const confTitulo = document.querySelector(`#${agenteId} .conferidos-titulo`);
-      const totalSpan = confTitulo?.querySelector('.total-conferidos');
+      const totalSpan = confTitulo?.querySelector(".total-conferidos");
       const confCountMatch = confTitulo?.textContent.match(/Conferidos\s*\((\d+)\)/);
       const confCount = confCountMatch ? parseInt(confCountMatch[1]) : 0;
-      const totalValor = parseFloat(totalSpan?.textContent.replace(/[^\d,.-]/g, '').replace(',', '.') || 0);
+      const totalValor = parseFloat(totalSpan?.textContent.replace(/[^\d,.-]/g, "").replace(",", ".") || 0);
 
       const faltandoTitulo = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
       const faltandoMatch = faltandoTitulo?.textContent.match(/\((\d+)\)/);
       const faltandoCount = faltandoMatch ? parseInt(faltandoMatch[1]) : 0;
 
-      if (destino === 'conferido') {
-        // ➕ Adiciona ao conferido
+      // =====================================================
+      // 🟢 DESTINO = CONFIRMAR → Mover de Faltando PDF → Conferido
+      // =====================================================
+      if (destino === "conferido") {
+
+        let detalheManual = "confirmado manualmente";
+
+        let motivo = motivoRaw;
+        let mNome = motivo.match(/'([^']+)'/);
+        let mValor = motivo.match(/R\$[\s]*([\d\.,]+)/);
+
+        if (mNome && mValor) {
+          detalheManual = `confirmado manualmente (baseado em ${mNome[1]} — R$${mValor[1]})`;
+        }
+
         const confContainer = document.querySelector(`#${agenteId} .fw-bold.text-success`);
+
         if (confContainer) {
-          const novo = document.createElement('div');
-          novo.className = 'entry ok';
+          const novo = document.createElement("div");
+          novo.className = "entry ok";
+
           novo.innerHTML = `
             <div class="d-flex justify-content-between align-items-start">
               <div>
-                <div class="fw-bold text-success mb-1">${nome}</div>
+                <div class="fw-bold text-success mb-1">
+                  <span class="badge-banco">${banco}</span> ${nome}
+                </div>
+
                 <div class="mt-1 ps-1">
-                  <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
+                  <div>
+                    <i class="bi bi-file-earmark-excel text-success me-1"></i>
                     <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
                   </div>
-                  <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                    <small><strong>PDF:</strong> <em>confirmado manualmente</em></small>
+
+                  <div>
+                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                    <small><strong>PDF:</strong> <em>${detalheManual}</em></small>
                   </div>
                 </div>
               </div>
+
               <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
-                      data-agente="${agente}" data-nome="${nome}"
-                      data-valor="${valor}" data-hora="${hora}">
+                      data-agente="${agente}"
+                      data-nome="${nome}"
+                      data-valor="${valor}"
+                      data-hora="${hora}"
+                      data-banco="${banco}">
                 <i class="bi bi-x-circle"></i>
               </button>
-            </div>`;
-          confContainer.insertAdjacentElement('afterend', novo);
-          atualizarContadores(meta, confTitulo, faltandoTitulo, confCount + 1, faltandoCount - 1, valor, totalValor);
-          novo.querySelector('.desmarcar-conferido').addEventListener('click', () =>
-            moverItem(novo.querySelector('.desmarcar-conferido'), 'conferido', 'faltando'));
+            </div>
+          `;
+
+          confContainer.insertAdjacentElement("afterend", novo);
+
+          atualizarContadores(
+            meta,
+            confTitulo,
+            faltandoTitulo,
+            confCount + 1,
+            faltandoCount - 1,
+            valor,
+            totalValor
+          );
+
+          novo.querySelector(".desmarcar-conferido").addEventListener("click", () =>
+            moverItem(novo.querySelector(".desmarcar-conferido"), "conferido", "faltando")
+          );
         }
-      } else {
-        // ➖ Volta para faltando PDF
+
+        // ---------------------------------------------------------
+        // 🔥 REMOVER DA LISTA DE "FALTANDO EXCEL"
+        // ---------------------------------------------------------
+
+        let nomeSugerido = mNome ? mNome[1].trim().toLowerCase() : null;
+        let valorSugerido = mValor ? parseFloat(mValor[1].replace(/\./g, "").replace(",", ".")) : null;
+
+        const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        let semAgCard = null;
+        document.querySelectorAll(".agent-card").forEach(c => {
+          const hdr = c.querySelector(".agent-header")?.innerText.toLowerCase() || "";
+          if (hdr.includes("faltando excel")) {
+            semAgCard = c;
+          }
+        });
+
+        if (semAgCard) {
+          const itensErr = semAgCard.querySelectorAll(".entry.err");
+
+          itensErr.forEach(el => {
+            const nomeErr = norm(el.querySelector("strong")?.innerText);
+            const txt = el.innerText;
+
+            const mv = txt.match(/R\$[\s]*([\d\.,]+)/);
+            const valorErr = mv ? parseFloat(mv[1].replace(/\./g, "").replace(",", ".")) : null;
+
+            const matchNome = nomeSugerido
+              ? nomeErr.includes(norm(nomeSugerido))
+              : nomeErr.includes(norm(nome));
+
+            const matchValor =
+              valorSugerido != null && valorErr != null
+                ? Math.abs(valorErr - valorSugerido) < 0.02
+                : true;
+
+            if (matchNome && matchValor) {
+              el.remove();
+            }
+          });
+
+          const novoCount = semAgCard.querySelectorAll(".entry.err").length;
+          const header = semAgCard.querySelector(".agent-header div");
+          if (header) {
+            header.innerHTML = `❌ FALTANDO EXCEL : ${novoCount}`;
+          }
+        }
+
+        recalcAndRenderAgent(agenteId);
+        return;
+      }
+
+      // =====================================================
+      // 🔴 DESTINO = VOLTAR → Conferido → Faltando PDF
+      // =====================================================
+      else {
         const faltContainer = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
+
         if (faltContainer) {
-          const novo = document.createElement('div');
-          novo.className = 'entry warn';
+          const novo = document.createElement("div");
+          novo.className = "entry warn";
+
           novo.innerHTML = `
             <div class="d-flex justify-content-between align-items-start">
               <div>
-                <div class="fw-bold text-warning mb-1">${nome}</div>
+                <div class="fw-bold text-warning mb-1">
+                  <span class="badge-banco">${banco}</span> ${nome}
+                </div>
+
                 <div class="mt-1 ps-1">
                   <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
                     <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
                   </div>
+
                   <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
                     <small><strong>PDF:</strong> <em>não encontrado</em></small>
                   </div>
                 </div>
               </div>
+
               <button class="btn btn-sm btn-outline-success marcar-conferido"
-                      data-agente="${agente}" data-nome="${nome}"
-                      data-valor="${valor}" data-hora="${hora}">
+                      data-agente="${agente}"
+                      data-nome="${nome}"
+                      data-valor="${valor}"
+                      data-hora="${hora}"
+                      data-banco="${banco}">
                 <i class="bi bi-check-circle"></i>
               </button>
-            </div>`;
-          faltContainer.insertAdjacentElement('afterend', novo);
-          atualizarContadores(meta, confTitulo, faltandoTitulo, confCount - 1, faltandoCount + 1, -valor, totalValor);
-          novo.querySelector('.marcar-conferido').addEventListener('click', () =>
-            moverItem(novo.querySelector('.marcar-conferido'), 'faltando', 'conferido'));
+            </div>
+          `;
+
+          faltContainer.insertAdjacentElement("afterend", novo);
+
+          atualizarContadores(
+            meta,
+            confTitulo,
+            faltandoTitulo,
+            confCount - 1,
+            faltandoCount + 1,
+            -valor,
+            totalValor
+          );
+
+          novo.querySelector(".marcar-conferido").addEventListener("click", () =>
+            moverItem(novo.querySelector(".marcar-conferido"), "faltando", "conferido")
+          );
         }
       }
+
       recalcAndRenderAgent(agenteId);
     }
+
+
+
 
 
     // 🧮 Atualiza contadores e total dinamicamente
@@ -444,8 +677,6 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('totalFaltaPdf').textContent = '0';
   document.getElementById('totalFaltaExcel').textContent = '0';
 });
-
-
 document.getElementById('btnExport').addEventListener('click', async () => {
   const resultado = document.getElementById('resultado');
   if (!resultado.innerHTML.trim()) return alert('Nada para exportar');
@@ -575,5 +806,6 @@ document.getElementById('btnExport').addEventListener('click', async () => {
 
   html2pdf().set(optFinal).from(wrapper).save();
 });
+
 
 
