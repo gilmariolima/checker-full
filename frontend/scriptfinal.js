@@ -50,48 +50,11 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
 
   try {
-    const resp = await fetch(`${backendURL}/conferir_caixa`, {
-    method: 'POST',
-    body: fd
-  });
-  
-  // Se não OK, tenta ler corpo e mostrar
-  if (!resp.ok) {
-    const text = await resp.text();
-    document.getElementById('progressArea').style.display = 'none';
-    // se for HTML (começa com <), mostra mensagem curta e loga o HTML
-    if (text && text.trim().startsWith('<')) {
-      document.getElementById('resultado').innerHTML = `<div class="alert alert-danger">Erro no servidor (HTML retornado). Veja o console do servidor para detalhes.</div>`;
-      console.error('Resposta HTML do servidor:', text);
-    } else {
-      // possivelmente JSON de erro
-      try {
-        const j = JSON.parse(text);
-        document.getElementById('resultado').innerHTML = `<div class="alert alert-danger">${j.erro || JSON.stringify(j)}</div>`;
-      } catch (e) {
-        document.getElementById('resultado').innerHTML = `<div class="alert alert-danger">Erro inesperado: ${text}</div>`;
-      }
-    }
-    return;
-  }
-  
-  // tenta parsear JSON com segurança
-  let dados;
-  const contentType = resp.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    dados = await resp.json();
-  } else {
-    const text = await resp.text();
-    try {
-      dados = JSON.parse(text);
-    } catch (e) {
-      document.getElementById('progressArea').style.display = 'none';
-      document.getElementById('resultado').innerHTML = `<div class="alert alert-danger">Resposta inválida do servidor. Verifique logs do servidor.</div>`;
-      console.error('Resposta inválida:', text);
-      return;
-    }
-  }
-
+    const backendURL = window.location.origin; // Detecta o domínio atual (Render)
+    const resp = await fetch(`${window.location.origin}/conferir_caixa`, {
+      method: 'POST',
+      body: fd
+    });
     const dados = await resp.json();
     document.getElementById('progressArea').style.display = 'none';
 
@@ -824,12 +787,5 @@ document.getElementById('btnExport').addEventListener('click', async () => {
 
   html2pdf().set(optFinal).from(wrapper).save();
 });
-
-
-
-
-
-
-
 
 
