@@ -33,9 +33,21 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
   document.getElementById('progressArea').style.display = 'block';
 
   const fd = new FormData();
-  fd.append('pdf', pdf);
-  for (let i = 0; i < excels.length; i++) fd.append('excels', excels[i]);
-  fd.append('data', dataFiltro);
+
+  // 🟢 ENVIAR TODOS OS PDFs (mesmo que seja só 1)
+  const pdfFiles = document.getElementById('pdfFile').files;
+  for (let i = 0; i < pdfFiles.length; i++) {
+    fd.append('pdfs', pdfFiles[i]);  // <-- NOME CORRETO
+  }
+  
+  // 🟢 ENVIAR TODOS OS EXCELS
+  for (let i = 0; i < excels.length; i++) {
+    fd.append('excels', excels[i]);  // <-- JÁ ESTAVA CERTO
+  }
+  
+  // 🟡 DATA
+  fd.append('data', dataFiltro || '');
+
 
   try {
     const backendURL = window.location.origin; // Detecta o domínio atual (Render)
@@ -806,6 +818,7 @@ document.getElementById('btnExport').addEventListener('click', async () => {
 
   html2pdf().set(optFinal).from(wrapper).save();
 });
+
 
 
 
