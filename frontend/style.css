@@ -212,3 +212,24 @@ footer {
 .btn + .btn {
   margin-left: 5px;
 }
+
+
+.bank-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+.badge-bb {
+  background: #facc15; /* amarelo */
+  color: black;
+}
+
+.badge-c6 {
+  background: black;
+  color: white;
+}
+
