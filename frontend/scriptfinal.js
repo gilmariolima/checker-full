@@ -300,6 +300,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
 
     resEl.innerHTML = html;
+    recalcAll();
 
     // 🔧 Ajuste visual para o agente "Sem Agente"
     document.querySelectorAll('.agent-card').forEach(card => {
@@ -353,82 +354,134 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
 
     // Recalcula contadores, soma total dos "conferidos" e atualiza o círculo de progresso
-    function recalcAndRenderAgent(agenteId) {
+    // ---------- Nova lógica de contagem e renderização (substitui recalcAndRenderAgent) ----------
+    function updateAllCountsAndRender(agentIdToFocus = null) {
       try {
-        // agenteId exemplo: "GILMARIO_LIMA" — corresponde ao id do .agent-content
-        const agentContent = document.getElementById(agenteId);
-        if (!agentContent) return;
+        // Recalcula por agente: percorre todos os .agent-card e atualiza meta, titulos e circulos
+        const agentCards = Array.from(document.querySelectorAll('.agent-card'));
+        let totalConferidosGlob = 0;
+        let totalFaltaPdfGlob = 0;
+        let totalFaltaExcelGlob = 0;
+        let totalValorConferidosGlob = 0;
 
-        const agentCard = agentContent.closest('.agent-card');
-        if (!agentCard) return;
+        agentCards.forEach(card => {
+          const agentContent = card.querySelector('.agent-content');
+          const agentId = agentContent ? agentContent.id : null;
 
-        // contar entradas
-        const conferidosEls = agentCard.querySelectorAll('.entry.ok');
-        const faltandoEls = agentCard.querySelectorAll('.entry.warn');
-        const faltaExcelEls = agentCard.querySelectorAll('.entry.err');
+          // Conta elementos atuais dentro do card
+          const conferidosEls = card.querySelectorAll('.entry.ok');
+          const faltandoEls = card.querySelectorAll('.entry.warn');
+          const faltaExcelEls = card.querySelectorAll('.entry.err');
 
-        const conferidosCount = conferidosEls.length;
-        const faltandoCount = faltandoEls.length;
-        const faltaExcelCount = faltaExcelEls.length;
+          const conferidosCount = conferidosEls.length;
+          const faltandoCount = faltandoEls.length;
+          const faltaExcelCount = faltaExcelEls.length;
 
-        // somar valores dos conferidos: tenta extrair R$ XX,XX do texto de cada entry.ok
-        let totalValor = 0;
-        conferidosEls.forEach(el => {
-          // procura primeiro "R$ x.xxx,xx" no texto do elemento
-          const txt = el.innerText || '';
-          const m = txt.match(/R\$[\s]*([\d\.\,]+)/);
-          if (m && m[1]) {
-            const numStr = m[1].trim().replace(/\./g, '').replace(',', '.'); // 1.234,56 -> 1234.56
-            const n = parseFloat(numStr) || 0;
-            totalValor += n;
-          } else {
-            // fallback: checa atributo data-valor se existir
-            const dv = el.dataset && el.dataset.valor;
-            if (dv) totalValor += parseFloat(dv) || 0;
+          // soma valores dos conferidos no card
+          let totalValor = 0;
+          conferidosEls.forEach(el => {
+            const txt = el.innerText || '';
+            const m = txt.match(/R\$[\s]*([\d\.\,]+)/);
+            if (m && m[1]) {
+              const numStr = m[1].trim().replace(/\./g, '').replace(',', '.');
+              totalValor += parseFloat(numStr) || 0;
+            } else {
+              const dv = el.dataset && el.dataset.valor;
+              if (dv) totalValor += parseFloat(dv) || 0;
+            }
+          });
+
+          // Atualiza a linha meta (se existir)
+          const metaEl = card.querySelector('.agent-meta');
+          if (metaEl) {
+            metaEl.textContent = `Conferidos: ${conferidosCount} • Falta PDF: ${faltandoCount} • Falta Excel: ${faltaExcelCount}`;
           }
+
+          // Atualiza o título de conferidos e total no card
+          const confTituloEl = card.querySelector('.conferidos-titulo');
+          if (confTituloEl) {
+            confTituloEl.innerHTML = `✅ Conferidos (${conferidosCount}) — Total: <span class='total-conferidos'>${formatCurrency(totalValor)}</span>`;
+          }
+
+          // Atualiza título de faltando PDF dentro do card (se houver)
+          const faltTituloEl = card.querySelector('.fw-bold.text-warning');
+          if (faltTituloEl) {
+            faltTituloEl.innerHTML = `⚠️ Faltando no PDF (${faltandoCount})`;
+          }
+
+          // Atualiza título vermelho do card "Sem Agente" (FALTANDO EXCEL)
+          const isSemAgenteHeader = (card.querySelector('.agent-header')?.innerText || '').toUpperCase().includes('FALTANDO EXCEL');
+          if (isSemAgenteHeader) {
+            const headerDiv = card.querySelector('.agent-header div');
+            if (headerDiv) {
+              headerDiv.innerHTML = `❌ FALTANDO EXCEL : ${faltaExcelCount}`;
+            }
+          }
+
+          // Atualiza círculo de progresso do card
+          const totalItens = Math.max(1, conferidosCount + faltandoCount + faltaExcelCount);
+          const perc = Math.round((conferidosCount / totalItens) * 100);
+          const circles = card.querySelectorAll('.progress-ring circle');
+          const circle = circles.length > 1 ? circles[1] : circles[0];
+          const inner = card.querySelector('.circle-inner');
+          if (circle && inner) {
+            const r = parseFloat(circle.getAttribute('r')) || 16;
+            const circ = 2 * Math.PI * r;
+            const offset = ((1 - perc / 100) * circ).toFixed(2);
+            circle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.3s ease';
+            circle.setAttribute('stroke-dashoffset', offset);
+            circle.setAttribute('stroke', perc === 100 ? '#16a34a' : '#0a66c2');
+            inner.textContent = `${perc}%`;
+          }
+
+          // acumula para o total global
+          totalConferidosGlob += conferidosCount;
+          totalFaltaPdfGlob += faltandoCount;
+          totalFaltaExcelGlob += faltaExcelCount;
+          totalValorConferidosGlob += totalValor;
         });
 
-        // atualizar meta (linha pequena abaixo do nome do agente)
-        const metaEl = agentCard.querySelector('.agent-meta');
-        if (metaEl) {
-          metaEl.textContent = `Conferidos: ${conferidosCount} • Falta PDF: ${faltandoCount} • Falta Excel: ${faltaExcelCount}`;
+        // Atualiza badges/globais no topo
+        const totalConferidosEl = document.getElementById('totalConferidos');
+        const totalFaltaPdfEl = document.getElementById('totalFaltaPdf');
+        const totalFaltaExcelEl = document.getElementById('totalFaltaExcel');
+
+        if (totalConferidosEl) totalConferidosEl.textContent = totalConferidosGlob;
+        if (totalFaltaPdfEl) totalFaltaPdfEl.textContent = totalFaltaPdfGlob;
+        if (totalFaltaExcelEl) totalFaltaExcelEl.textContent = totalFaltaExcelGlob;
+
+        // Se existir um badge/summary visível com o total em moeda, atualiza também (opcional):
+        // Ex.: um cabeçalho que mostra total de conferidos em R$
+        const topoTotalSpan = document.querySelector('.total-conferidos-topo');
+        if (topoTotalSpan) topoTotalSpan.textContent = formatCurrency(totalValorConferidosGlob);
+
+        // Se foi passada uma agentId, foca (re-render) só nela — senão, retorna true
+        if (agentIdToFocus) {
+          const agentContent = document.getElementById(agentIdToFocus);
+          if (agentContent) {
+            // já atualizamos globalmente; opcional: destacar temporariamente
+            const card = agentContent.closest('.agent-card');
+            if (card) {
+              card.style.transition = 'box-shadow 0.2s';
+              card.style.boxShadow = '0 0 0 3px rgba(10,102,194,0.08)';
+              setTimeout(() => card.style.boxShadow = '', 350);
+            }
+          }
         }
 
-        // atualizar título de conferidos e total
-        const confTituloEl = agentCard.querySelector('.conferidos-titulo');
-        if (confTituloEl) {
-          const totalFormatted = formatCurrency(totalValor);
-          confTituloEl.innerHTML = `✅ Conferidos (${conferidosCount}) — Total: <span class='total-conferidos'>${totalFormatted}</span>`;
-        }
-
-        // atualizar contador amarelo (faltando)
-        const faltTituloEl = agentCard.querySelector('.fw-bold.text-warning');
-        if (faltTituloEl) {
-          faltTituloEl.innerHTML = `⚠️ Faltando no PDF (${faltandoCount})`;
-        }
-
-        // atualizar círculo de progresso (percentual)
-        const totalItens = Math.max(1, conferidosCount + faltandoCount + faltaExcelCount);
-        const perc = Math.round((conferidosCount / totalItens) * 100);
-
-        // pega o segundo circle (o visível) e o .circle-inner
-        const circles = agentCard.querySelectorAll('.progress-ring circle');
-        const circle = circles.length > 1 ? circles[1] : circles[0];
-        const inner = agentCard.querySelector('.circle-inner');
-
-        if (circle && inner) {
-          const r = parseFloat(circle.getAttribute('r')) || 16;
-          const circ = 2 * Math.PI * r;
-          const offset = ((1 - perc / 100) * circ).toFixed(2);
-          circle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.3s ease';
-          circle.setAttribute('stroke-dashoffset', offset);
-          circle.setAttribute('stroke', perc === 100 ? '#16a34a' : '#0a66c2');
-          inner.textContent = `${perc}%`;
-        }
+        return true;
       } catch (err) {
-        console.warn('recalcAndRenderAgent erro:', err);
+        console.warn('updateAllCountsAndRender erro:', err);
+        return false;
       }
     }
+
+    // Wrapper compatível (mantém chamadas antigas funcionando)
+    function recalcAndRenderAgent(agenteId) {
+      // agenteId pode ser id do .agent-content ou null
+      updateAllCountsAndRender(agenteId);
+    }
+
 
     function calcularSimilaridade(a, b) {
       if (!a || !b) return 0;
@@ -517,6 +570,25 @@ function parseCurrencyFromText(txt) {
 
       return removidos;
     }
+
+    function recalcAll() {
+
+      // === Contagens globais ===
+      const totalConferidos = document.querySelectorAll(".entry.ok").length;
+      const totalFaltaPDF = document.querySelectorAll(".entry.warn").length;
+      const totalFaltaExcel = document.querySelectorAll(".entry.err").length;
+
+      document.getElementById("totalConferidos").textContent = totalConferidos;
+      document.getElementById("totalFaltaPdf").textContent = totalFaltaPDF;
+      document.getElementById("totalFaltaExcel").textContent = totalFaltaExcel;
+
+      // === Recalcula cada agente individualmente ===
+      document.querySelectorAll(".agent-content").forEach(ac => {
+          const agentId = ac.id;
+          if (agentId) recalcAndRenderAgent(agentId);
+      });
+    }
+
 
 
 
@@ -618,7 +690,7 @@ function parseCurrencyFromText(txt) {
 
               confContainer.insertAdjacentElement("afterend", novo);
 
-              recalcAndRenderAgent(agenteId);
+              recalcAll();
           }
 
           return;
