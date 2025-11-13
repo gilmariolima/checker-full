@@ -19,6 +19,37 @@ function badgeBanco(b) {
   return "";
 }
 
+function extractValor(motivoRaw) {
+  const m = motivoRaw.match(/R\$[\s]*([\d\.,]+)/);
+  if (!m) return null;
+
+  let txt = m[1].trim();
+
+  // Caso nº1: formato BR com milhar e decimal → 4.705,00
+  if (/^\d{1,3}(\.\d{3})+,\d{2}$/.test(txt)) {
+    return parseFloat(txt.replace(/\./g, "").replace(",", "."));
+  }
+
+  // Caso nº2: formato BR simples → 47,05
+  if (/^\d+,\d{2}$/.test(txt)) {
+    return parseFloat(txt.replace(",", "."));
+  }
+
+  // Caso nº3: formato US → 47.05
+  if (/^\d+\.\d{2}$/.test(txt)) {
+    return parseFloat(txt);
+  }
+
+  // Caso nº4: número inteiro → 4705
+  if (/^\d+$/.test(txt)) {
+    return parseFloat(txt);
+  }
+
+  // fallback final
+  return parseFloat(txt.replace(",", "."));
+}
+
+
 let bancoDetectado = '';
 
 document.getElementById('btnConferir').addEventListener('click', async () => {
@@ -162,11 +193,13 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                   </div>
 
                   <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
-                        data-agente="${agente}"
-                        data-nome="${x.nome_excel || x.nome}"
-                        data-valor="${x.valor_excel || x.valor_pdf}"
-                        data-hora="${x.hora_excel || x.hora_pdf}"
-                        data-banco="${x.banco_pdf || x.banco || ''}">
+                    data-agente="${agente}"
+                    data-nome="${x.nome_excel || x.nome}"
+                    data-valor="${x.valor_excel || x.valor_pdf}"
+                    data-hora="${x.hora_excel || x.hora_pdf}"
+                    data-banco="${x.banco_pdf || x.banco || ''}"
+                    data-origem="faltando_pdf">
+
                   <i class="bi bi-x-circle"></i>
                 </button>
 
@@ -233,30 +266,31 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
               </div>
 
               ${d.faltando_excel
-                .map(
-                  (x) => `
+                  .map((x) => `
               <div class='entry err'>
-                <strong>
-                  ${badgeBanco(x.banco)}
-                  ${x.nome}
-                </strong>
+                  <strong>
+                      ${badgeBanco(x.banco || x.banco_pdf || x.banco_excel)}
+                      ${x.nome || x.nome_pdf || "(sem nome)"}
+                  </strong>
 
-                <div class="mt-1">
-                  <div>
-                    <i class="bi bi-file-earmark-excel text-success"></i>
-                    <small><strong>Excel:</strong> <em>não encontrado</em></small>
-                  </div>
+                  <div class="mt-1">
+                      <div>
+                          <i class="bi bi-file-earmark-excel text-success"></i>
+                          <small><strong>Excel:</strong> <em>não encontrado</em></small>
+                      </div>
 
-                  <div>
-                    <i class="bi bi-file-earmark-pdf text-danger"></i>
-                    <small>
-                      <strong>PDF:</strong> ${formatCurrency(x.valor)} • ${x.hora}
-                    </small>
+                      <div>
+                          <i class="bi bi-file-earmark-pdf text-danger"></i>
+                          <small>
+                              <strong>PDF:</strong> ${formatCurrency(x.valor)} • ${x.hora}
+                          </small>
+                      </div>
                   </div>
-                </div>
               </div>`
-                )
-                .join("")}
+                  )
+                  .join("")}
+
+
             </div>
           </div>
         </div>`;
@@ -404,184 +438,313 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       return matches / Math.max(a.length, b.length);
     }
 
+
+
+
+
+    // ---------- helpers locais (cole no topo do arquivo se ainda não tiver) ----------
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseCurrencyFromText(txt) {
+  if (!txt) return null;
+  const m = String(txt).match(/R\$[\s]*([\d\.\,]+)/);
+  if (!m) return null;
+  const numStr = m[1].replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(numStr);
+  return Number.isFinite(n) ? n : null;
+}
+
+    // ---------- função que remove itens correspondentes na lista "Faltando no Excel" ----------
+    function removeMatchingFromFaltandoExcel({ nomeToMatch, valorToMatch }) {
+      const nomeNorm = normalizeText(nomeToMatch);
+      const valorNum = typeof valorToMatch === "number"
+        ? valorToMatch
+        : parseFloat(valorToMatch) || null;
+
+      const errItems = Array.from(document.querySelectorAll('.entry.err'));
+
+      let removidos = 0;
+
+      errItems.forEach(el => {
+        try {
+          const strong = el.querySelector('strong');
+          const nomeErr = normalizeText(strong ? strong.textContent : "");
+          const valorErr = parseCurrencyFromText(el.innerText);
+
+          const matchNome =
+            nomeNorm &&
+            (nomeErr.includes(nomeNorm) || nomeNorm.includes(nomeErr));
+
+          const matchValor =
+            valorNum != null && valorErr != null
+              ? Math.abs(valorErr - valorNum) < 0.05
+              : true;
+
+          if (matchNome && matchValor) {
+            const agentContent = el.closest(".agent-content");
+            const agentId = agentContent ? agentContent.id : null;
+
+            el.style.transition = "opacity 0.35s ease, transform 0.35s ease";
+            el.style.opacity = "0";
+            el.style.transform = "translateX(-16px)";
+
+            setTimeout(() => {
+              el.remove();
+              if (agentId) recalcAndRenderAgent(agentId);
+            }, 360);
+
+            removidos++;
+          }
+        } catch (err) {
+          console.warn("Erro ao remover faltando_excel:", err);
+        }
+      });
+
+      // Atualiza contador global
+      if (removidos > 0) {
+        setTimeout(() => {
+          document.getElementById("totalFaltaExcel").textContent =
+            document.querySelectorAll(".entry.err").length;
+        }, 400);
+      }
+
+      return removidos;
+    }
+
+
+
     // 🔄 Função geral para mover itens entre listas (com limpeza automática no "Faltando Excel")
+    // 🔄 Função geral para mover itens entre listas (com limpeza automática)
     function moverItem(btn, origem, destino) {
+
+      const origemReal = btn.dataset.origem || origem;
+      const voltarExcel = btn.dataset.voltarexcel === "1";   
       const nome = btn.dataset.nome?.trim() || "";
-      const valor = parseFloat(btn.dataset.valor || 0);
+      let valor = parseFloat(btn.dataset.valor || 0);
       const hora = btn.dataset.hora || "(sem hora)";
       const agente = btn.dataset.agente;
       const banco = btn.dataset.banco || "";
+      const motivoSalvo = decodeURIComponent(btn.dataset.motivo || "");
       const agenteId = agente.replace(/\s+/g, "_");
 
-      // Captura motivo antes de remover
       const card = btn.closest(`.entry.${origem === "conferido" ? "ok" : "warn"}`);
       let motivoRaw = "";
+
       if (card) {
-        motivoRaw = card.querySelector(".text-muted small")?.textContent || "";
-        card.remove();
+          motivoRaw =
+              card.querySelector(".text-muted small")?.textContent ||
+              motivoSalvo ||
+              "";
+          card.remove();
       }
 
-      const meta = document.querySelector(`#${agenteId} .agent-meta`);
-      const confTitulo = document.querySelector(`#${agenteId} .conferidos-titulo`);
-      const totalSpan = confTitulo?.querySelector(".total-conferidos");
-      const confCountMatch = confTitulo?.textContent.match(/Conferidos\s*\((\d+)\)/);
-      const confCount = confCountMatch ? parseInt(confCountMatch[1]) : 0;
-      const totalValor = parseFloat(totalSpan?.textContent.replace(/[^\d,.-]/g, "").replace(",", ".") || 0);
-      const faltandoTitulo = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
-      const faltandoMatch = faltandoTitulo?.textContent.match(/\((\d+)\)/);
-      const faltandoCount = faltandoMatch ? parseInt(faltandoMatch[1]) : 0;
-
-      // =====================================================
-      // 🟢 DESTINO = CONFIRMAR → Mover de Faltando PDF → Conferido
-      // =====================================================
+      // ============================================================
+      // DESTINO: CONFERIDO
+      // ============================================================
       if (destino === "conferido") {
-        let detalheManual = "confirmado manualmente";
 
-        let motivo = motivoRaw;
-        let mNome = motivo.match(/'([^']+)'/); // 👈 Nome dentro das aspas
-        let mValor = motivo.match(/R\$[\s]*([\d\.,]+)/); // 👈 Valor dentro do motivo
+          let detalheManual = "confirmado manualmente";
 
-        if (mNome && mValor) {
-          detalheManual = `confirmado manualmente (baseado em ${mNome[1]} — R$${mValor[1]})`;
-        }
+          let nomeBase = null;
+          let valorBaseNum = extractValor(motivoRaw);
 
-        const confContainer = document.querySelector(`#${agenteId} .fw-bold.text-success`);
-        if (confContainer) {
-          const novo = document.createElement("div");
-          novo.className = "entry ok";
-          novo.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <div class="fw-bold text-success mb-1">
-                  ${badgeBanco(banco)} ${nome}
-                </div>
-                <div class="mt-1 ps-1">
+          let mNome = motivoRaw.match(/'([^']+)'/);
+          if (mNome) nomeBase = mNome[1].trim();
+
+          if (nomeBase && valorBaseNum != null) {
+              detalheManual =
+                  `confirmado manualmente (baseado em ${nomeBase} — R$${valorBaseNum
+                      .toFixed(2)
+                      .replace(".", ",")})`;
+          }
+
+          const confContainer = document.querySelector(`#${agenteId} .fw-bold.text-success`);
+
+          if (confContainer) {
+              const novo = document.createElement("div");
+              novo.className = "entry ok";
+
+              // REMOVE DO FALTANDO EXCEL
+              let removidosExcel = 0;
+              if (nomeBase && valorBaseNum != null) {
+                  removidosExcel = removeMatchingFromFaltandoExcel({
+                      nomeToMatch: nomeBase,
+                      valorToMatch: valorBaseNum
+                  });
+              }
+
+              novo.innerHTML = `
+              <div class="d-flex justify-content-between align-items-start">
                   <div>
-                    <i class="bi bi-file-earmark-excel text-success me-1"></i>
-                    <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
+                      <div class="fw-bold text-success mb-1">
+                          ${badgeBanco(banco)} ${nome}
+                      </div>
+                      <div class="mt-1 ps-1">
+                          <div>
+                              <i class="bi bi-file-earmark-excel text-success me-1"></i>
+                              <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
+                          </div>
+                          <div>
+                              <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                              <small><strong>PDF:</strong> <em>${detalheManual}</em></small>
+                          </div>
+                      </div>
                   </div>
-                  <div>
-                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                    <small><strong>PDF:</strong> <em>${detalheManual}</em></small>
-                  </div>
-                </div>
-              </div>
-              <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
+
+                  <button class="btn btn-sm btn-outline-danger desmarcar-conferido"
                       data-agente="${agente}"
                       data-nome="${nome}"
                       data-valor="${valor}"
                       data-hora="${hora}"
-                      data-banco="${banco}">
-                <i class="bi bi-x-circle"></i>
-              </button>
-            </div>`;
-          confContainer.insertAdjacentElement("afterend", novo);
-          novo.querySelector(".desmarcar-conferido").addEventListener("click", () =>
-            moverItem(novo.querySelector(".desmarcar-conferido"), "conferido", "faltando")
-          );
+                      data-banco="${banco}"
+                      data-origem="${origemReal}"
+                      data-motivo="${encodeURIComponent(motivoRaw)}"
+                      data-voltarexcel="${removidosExcel > 0 ? "1" : "0"}"
+                  >
+                      <i class="bi bi-x-circle"></i>
+                  </button>
+              </div>`;
 
-          atualizarContadores(meta, confTitulo, faltandoTitulo, confCount + 1, faltandoCount - 1, valor, totalValor);
-        }
+              novo.querySelector(".desmarcar-conferido").addEventListener("click", () =>
+                  moverItem(novo.querySelector(".desmarcar-conferido"), "conferido", "faltando")
+              );
 
-        // =====================================================
-        // 🔥 BLOCO FINAL → Remover item da lista "Faltando Excel"
-        // =====================================================
-        const nomeSugerido = mNome ? mNome[1].trim().toLowerCase() : "";
-        const valorSugerido = mValor
-          ? parseFloat(mValor[1].replace(/\./g, "").replace(",", "."))
-          : null;
+              confContainer.insertAdjacentElement("afterend", novo);
 
-        const normalize = s =>
-          (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        // 🟢 Procurar o card "FALTANDO EXCEL" (ou agente "Sem Agente")
-        const semAgenteCard = Array.from(document.querySelectorAll(".agent-card")).find(card => {
-          const header = card.querySelector(".agent-header");
-          const headerText = header?.innerText.toUpperCase() || "";
-          const agentName = card.querySelector(".agent-name")?.innerText.toUpperCase() || "";
-          return headerText.includes("FALTANDO EXCEL") || agentName.includes("SEM AGENTE");
-        });
-
-        if (semAgenteCard) {
-          const itensErr = semAgenteCard.querySelectorAll(".entry.err");
-          let removidos = 0;
-
-          itensErr.forEach(el => {
-            const nomeErr = normalize(el.querySelector("strong")?.textContent || "");
-            const valMatch = el.innerText.match(/R\$[\s]*([\d\.,]+)/);
-            const valorErr = valMatch ? parseFloat(valMatch[1].replace(/\./g, "").replace(",", ".")) : null;
-
-            const matchNome = nomeSugerido && nomeErr.includes(normalize(nomeSugerido));
-            const matchValor =
-              valorSugerido != null && valorErr != null
-                ? Math.abs(valorErr - valorSugerido) < 0.05
-                : true;
-
-            if (matchNome && matchValor) {
-              // 🔸 animação suave
-              el.style.transition = "opacity 0.4s ease-out, transform 0.4s ease-out";
-              el.style.opacity = "0";
-              el.style.transform = "translateX(-20px)";
-              setTimeout(() => el.remove(), 400);
-              removidos++;
-            }
-          });
-
-          if (removidos > 0) {
-            setTimeout(() => {
-              const novoCount = semAgenteCard.querySelectorAll(".entry.err").length;
-              const header = semAgenteCard.querySelector(".agent-header div");
-              if (header) header.innerHTML = `❌ FALTANDO EXCEL : ${novoCount}`;
-              document.getElementById("totalFaltaExcel").textContent = novoCount;
-            }, 450);
+              recalcAndRenderAgent(agenteId);
           }
-        }
 
-        recalcAndRenderAgent(agenteId);
-        return;
+          return;
       }
 
-      // =====================================================
-      // 🔴 DESTINO = VOLTAR → Conferido → Faltando PDF
-      // =====================================================
-      const faltContainer = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
-      if (faltContainer) {
-        const novo = document.createElement("div");
-        novo.className = "entry warn";
-        novo.innerHTML = `
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <div class="fw-bold text-warning mb-1">
-                ${badgeBanco(banco)} ${nome}
-              </div>
-              <div class="mt-1 ps-1">
-                <div><i class="bi bi-file-earmark-excel text-success me-1"></i>
-                  <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
-                </div>
-                <div><i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                  <small><strong>PDF:</strong> <em>não encontrado</em></small>
-                </div>
-              </div>
-            </div>
-            <button class="btn btn-sm btn-outline-success marcar-conferido"
-                    data-agente="${agente}"
-                    data-nome="${nome}"
-                    data-valor="${valor}"
-                    data-hora="${hora}"
-                    data-banco="${banco}">
-              <i class="bi bi-check-circle"></i>
-            </button>
-          </div>`;
-        faltContainer.insertAdjacentElement("afterend", novo);
-        novo.querySelector(".marcar-conferido").addEventListener("click", () =>
-          moverItem(novo.querySelector(".marcar-conferido"), "faltando", "conferido")
-        );
+      // ============================================================
+      // DESTINO: VOLTAR (DESMARCAR)
+      // ============================================================
 
-        atualizarContadores(meta, confTitulo, faltandoTitulo, confCount - 1, faltandoCount + 1, -valor, totalValor);
+      // 1️⃣ VOLTAR PARA FALTANDO EXCEL (se foi removido lá)
+      if (voltarExcel) {
+
+        let nomeBase = null;
+        let valorBaseNum = extractValor(motivoRaw);
+
+        let mNome = motivoRaw.match(/'([^']+)'/);
+        if (mNome) nomeBase = mNome[1].trim();
+
+        const nomeFinal = nomeBase || nome;
+        const valorFinal = valorBaseNum ?? valor;
+
+        const semAgenteCard = Array.from(document.querySelectorAll(".agent-card"))
+            .find(card =>
+                card.querySelector(".agent-header")?.innerText
+                    .toUpperCase()
+                    .includes("FALTANDO EXCEL")
+            );
+
+        if (semAgenteCard) {
+
+            const novo = document.createElement("div");
+            novo.className = "entry err";
+
+            novo.innerHTML = `
+                <strong>${badgeBanco(banco)} ${nomeFinal}</strong>
+                <div class="mt-1">
+                    <div>
+                        <i class="bi bi-file-earmark-excel text-success"></i>
+                        <small><strong>Excel:</strong> <em>não encontrado</em></small>
+                    </div>
+                    <div>
+                        <i class="bi bi-file-earmark-pdf text-danger"></i>
+                        <small><strong>PDF:</strong> ${formatCurrency(valorFinal)} • ${hora}</small>
+                    </div>
+                </div>`;
+
+            semAgenteCard.querySelector(".agent-content").appendChild(novo);
+
+            // 🔥 ATUALIZA CONTADOR LOCAL
+            const localCount = semAgenteCard.querySelectorAll(".entry.err").length;
+            const tituloSemAgente = semAgenteCard.querySelector(".fw-bold");
+              if (tituloSemAgente) {
+                  tituloSemAgente.innerHTML = `❌ FALTANDO EXCEL : ${localCount}`;
+              }
+
+            // 🔥 ATUALIZA CONTADOR GLOBAL
+            document.getElementById("totalFaltaExcel").textContent =
+                document.querySelectorAll(".entry.err").length;
+
+            // 🔥 Recalcula o agente (mesmo sendo Sem Agente)
+            recalcAndRenderAgent(agenteId);
+        }
+    }
+
+
+
+      // 2️⃣ VOLTAR PARA FALTANDO PDF SEMPRE
+      const faltContainer = document.querySelector(`#${agenteId} .fw-bold.text-warning`);
+
+      if (faltContainer) {
+          const novo = document.createElement("div");
+          novo.className = "entry warn";
+
+          novo.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start">
+              <div>
+                  <div class="fw-bold text-warning mb-1">
+                      ${badgeBanco(banco)} ${nome}
+                  </div>
+
+                  <div class="mt-1 ps-1">
+                      <div>
+                          <i class="bi bi-file-earmark-excel text-success me-1"></i>
+                          <small><strong>Excel:</strong> ${nome} — ${formatCurrency(valor)} • ${hora}</small>
+                      </div>
+                      <div>
+                          <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                          <small><strong>PDF:</strong> <em>não encontrado</em></small>
+                      </div>
+                  </div>
+
+                  ${motivoRaw ? `
+                  <div class="text-muted mt-1">
+                      <small>${motivoRaw}</small>
+                  </div>` : ""}
+              </div>
+
+              <button class="btn btn-sm btn-outline-success marcar-conferido"
+                  data-agente="${agente}"
+                  data-nome="${nome}"
+                  data-valor="${valor}"
+                  data-hora="${hora}"
+                  data-banco="${banco}"
+                  data-origem="${origemReal}"
+                  data-motivo="${encodeURIComponent(motivoRaw)}"
+                  data-voltarexcel="${voltarExcel ? "1" : "0"}"
+              >
+                  <i class="bi bi-check-circle"></i>
+              </button>
+          </div>`;
+
+          faltContainer.insertAdjacentElement("afterend", novo);
+
+          novo.querySelector(".marcar-conferido").addEventListener("click", () =>
+              moverItem(novo.querySelector(".marcar-conferido"), "faltando", "conferido")
+          );
       }
 
       recalcAndRenderAgent(agenteId);
-    }
+  }
+
+
+
+
+
+
 
 
 
