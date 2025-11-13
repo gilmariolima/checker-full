@@ -5,9 +5,15 @@ import io, re, pdfplumber
 from datetime import datetime, date   # ✅ <-- ADICIONADO
 from difflib import SequenceMatcher
 import unicodedata
+import traceback
 from typing import List, Dict, Any    # ✅ tipos usados nas funções
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+# adicione isso entre os imports do topo
+try:
+    import pikepdf
+except Exception:
+    pikepdf = None  # ficará None se a lib não estiver instalada
 
 # ==========================================================
 # 🚀 Configuração principal
@@ -374,6 +380,9 @@ async def detalhe_c6(file_bytes: bytes, senha: str = None):
     """
     texto_total = ""
 
+    if pikepdf is None:
+        return {"erro": "pikepdf não está instalado no servidor. Instale com 'pip install pikepdf' ou verifique dependências."}
+
     # 1️⃣ Tenta abrir diretamente
     try:
         with pdfplumber.open(io.BytesIO(file_bytes), password=senha or None) as pdf:
@@ -579,244 +588,251 @@ from datetime import datetime, timedelta
 # ==========================================================
 @app.post("/conferir_caixa")
 async def conferir_caixa(
-    pdfs: List[UploadFile] = File(...),   # AGORA ACEITA MÚLTIPLOS PDFs
-    excels: List[UploadFile] = File(...),
-    data: str = Form(None),
-    senha: str = Form(None)
-):
-    todos_pdf = []       # ← PIX DO C6 + BB
-    bancos_detectados = set()
-
-    # ==========================================================
-    # 1️⃣ PROCESSAR CADA PDF ENVIADO
-    # ==========================================================
-    for pdf in pdfs:
-        try:
-            pdf_bytes = await pdf.read()
-            pdf_resp = await processar_pdf(pdf_bytes, senha)
-
-            if "erro" in pdf_resp:
-                print(f"⚠️ PDF ignorado ({pdf.filename}): {pdf_resp['erro']}")
-                continue
-
-            bancos_detectados.add(pdf_resp.get("banco", "").upper())
-            dados_pdf_local = pdf_resp.get("dados", [])
-            todos_pdf.extend(dados_pdf_local)
-
-            print(f"\n🏦 PDF: {pdf.filename}")
-            print(f"Banco detectado: {pdf_resp.get('banco')}")
-            print(f"PIX encontrados: {len(dados_pdf_local)}")
-
-        except Exception as e:
-            print(f"❌ Erro lendo PDF {pdf.filename}: {e}")
-
-    if not todos_pdf:
-        return {"erro": "Nenhum PDF válido ou sem PIX encontrado."}
-
-    print(f"\n📌 TOTAL GERAL DE PIX (C6 + BB): {len(todos_pdf)}\n")
-
-    dados_pdf = todos_pdf
-
-    # ==========================================================
-    # 2️⃣ PROCESSAR EXCELS
-    # ==========================================================
-    dados_excel = []
-    for excel in excels:
-        try:
-            excel_bytes = await excel.read()
-            excel_resp = await processar_excel(excel_bytes)
-            if isinstance(excel_resp, dict) and "tabela" in excel_resp:
-                dados_excel.extend(excel_resp["tabela"])
-            print(f"✅ Excel {excel.filename}: {len(excel_resp.get('tabela', []))} linhas")
-        except Exception as e:
-            print(f"❌ Erro ao ler Excel {excel.filename}: {e}")
-
-    if not dados_excel:
-        return {"erro": "Nenhum dado válido encontrado nas planilhas enviadas."}
-
-    # ==========================================================
-    # 3️⃣ FILTRO POR DATA
-    # ==========================================================
-    selected_date = None
-    if data:
-        try:
-            selected_date = datetime.strptime(data.strip(), "%Y-%m-%d").date()
-        except:
-            selected_date = try_parse_date(data.strip())
-
-    if selected_date:
-        total_pdf_antes = len(dados_pdf)
-        dados_pdf = filter_items_by_date(dados_pdf, selected_date)
-        print(f"\n📅 Filtro aplicado no PDF ({selected_date.strftime('%d/%m/%Y')})")
-        print(f"   PDF: {total_pdf_antes} → {len(dados_pdf)} após filtro")
-        print("=" * 60)
-
-    # ==========================================================
-    # 4️⃣ CONFERÊNCIA PRINCIPAL
-    # ==========================================================
-    def normalizar(s: str):
-        s = unicodedata.normalize("NFKD", s or "")
-        s = "".join(c for c in s if not unicodedata.combining(c))
-        return s.lower().strip()
-
-    def similaridade(n1: str, n2: str):
-        return SequenceMatcher(None, normalizar(n1), normalizar(n2)).ratio()
-
-    def normalizar_hora(h: str) -> str:
-        if not h:
+    try:
+        pdfs: List[UploadFile] = File(...),   # AGORA ACEITA MÚLTIPLOS PDFs
+        excels: List[UploadFile] = File(...),
+        data: str = Form(None),
+        senha: str = Form(None)
+    ):
+        todos_pdf = []       # ← PIX DO C6 + BB
+        bancos_detectados = set()
+    
+        # ==========================================================
+        # 1️⃣ PROCESSAR CADA PDF ENVIADO
+        # ==========================================================
+        for pdf in pdfs:
+            try:
+                pdf_bytes = await pdf.read()
+                pdf_resp = await processar_pdf(pdf_bytes, senha)
+    
+                if "erro" in pdf_resp:
+                    print(f"⚠️ PDF ignorado ({pdf.filename}): {pdf_resp['erro']}")
+                    continue
+    
+                bancos_detectados.add(pdf_resp.get("banco", "").upper())
+                dados_pdf_local = pdf_resp.get("dados", [])
+                todos_pdf.extend(dados_pdf_local)
+    
+                print(f"\n🏦 PDF: {pdf.filename}")
+                print(f"Banco detectado: {pdf_resp.get('banco')}")
+                print(f"PIX encontrados: {len(dados_pdf_local)}")
+    
+            except Exception as e:
+                print(f"❌ Erro lendo PDF {pdf.filename}: {e}")
+    
+        if not todos_pdf:
+            return {"erro": "Nenhum PDF válido ou sem PIX encontrado."}
+    
+        print(f"\n📌 TOTAL GERAL DE PIX (C6 + BB): {len(todos_pdf)}\n")
+    
+        dados_pdf = todos_pdf
+    
+        # ==========================================================
+        # 2️⃣ PROCESSAR EXCELS
+        # ==========================================================
+        dados_excel = []
+        for excel in excels:
+            try:
+                excel_bytes = await excel.read()
+                excel_resp = await processar_excel(excel_bytes)
+                if isinstance(excel_resp, dict) and "tabela" in excel_resp:
+                    dados_excel.extend(excel_resp["tabela"])
+                print(f"✅ Excel {excel.filename}: {len(excel_resp.get('tabela', []))} linhas")
+            except Exception as e:
+                print(f"❌ Erro ao ler Excel {excel.filename}: {e}")
+    
+        if not dados_excel:
+            return {"erro": "Nenhum dado válido encontrado nas planilhas enviadas."}
+    
+        # ==========================================================
+        # 3️⃣ FILTRO POR DATA
+        # ==========================================================
+        selected_date = None
+        if data:
+            try:
+                selected_date = datetime.strptime(data.strip(), "%Y-%m-%d").date()
+            except:
+                selected_date = try_parse_date(data.strip())
+    
+        if selected_date:
+            total_pdf_antes = len(dados_pdf)
+            dados_pdf = filter_items_by_date(dados_pdf, selected_date)
+            print(f"\n📅 Filtro aplicado no PDF ({selected_date.strftime('%d/%m/%Y')})")
+            print(f"   PDF: {total_pdf_antes} → {len(dados_pdf)} após filtro")
+            print("=" * 60)
+    
+        # ==========================================================
+        # 4️⃣ CONFERÊNCIA PRINCIPAL
+        # ==========================================================
+        def normalizar(s: str):
+            s = unicodedata.normalize("NFKD", s or "")
+            s = "".join(c for c in s if not unicodedata.combining(c))
+            return s.lower().strip()
+    
+        def similaridade(n1: str, n2: str):
+            return SequenceMatcher(None, normalizar(n1), normalizar(n2)).ratio()
+    
+        def normalizar_hora(h: str) -> str:
+            if not h:
+                return ""
+            h = str(h).strip().lower().replace(" ", "")
+            h = h.replace("h", ":")
+            if re.fullmatch(r"^\d{1,2}[:\.]\d{1,2}$", h):
+                p = re.split(r"[:\.]", h)
+                return f"{int(p[0]):02d}:{int(p[1]):02d}"
+            if re.fullmatch(r"^\d{3,4}$", h):
+                return f"{int(h[:-2]):02d}:{int(h[-2:]):02d}"
+            if re.fullmatch(r"^\d{1,2}$", h):
+                return f"{int(h):02d}:00"
+            if re.fullmatch(r"^\d{2}:\d{2}$", h):
+                return h
             return ""
-        h = str(h).strip().lower().replace(" ", "")
-        h = h.replace("h", ":")
-        if re.fullmatch(r"^\d{1,2}[:\.]\d{1,2}$", h):
-            p = re.split(r"[:\.]", h)
-            return f"{int(p[0]):02d}:{int(p[1]):02d}"
-        if re.fullmatch(r"^\d{3,4}$", h):
-            return f"{int(h[:-2]):02d}:{int(h[-2:]):02d}"
-        if re.fullmatch(r"^\d{1,2}$", h):
-            return f"{int(h):02d}:00"
-        if re.fullmatch(r"^\d{2}:\d{2}$", h):
-            return h
-        return ""
-
-    usados_pdf = set()
-    conferidos = []
-    faltando_no_pdf = []
-    faltando_no_excel = []
-
-    # ==========================================================
-    # 4.1️⃣ Excel → PDF
-    # ==========================================================
-    for item in dados_excel:
-        nome_excel = item.get("nome", "").strip()
-        valor_excel = round(item.get("valor") or 0.0, 2)
-        hora_excel = normalizar_hora(item.get("hora", ""))
-        agente_excel = (item.get("agente") or "").strip()
-
-        escolhido = None
-        candidatos = []
-
-        for idx, p in enumerate(dados_pdf):
-            nome_pdf = (p.get("nome") or "").strip()
-            valor_pdf = round(p.get("valor") or 0.0, 2)
-            hora_pdf = normalizar_hora(p.get("hora", ""))
-            data_pdf = try_parse_date(str(p.get("data", "")))
-            usado = idx in usados_pdf
-
-            if abs(valor_excel - valor_pdf) < 0.01:
-                sim = similaridade(nome_excel, nome_pdf)
-
-                hora_ok = True
-                hora_delta = 999999
-                if hora_excel and hora_pdf:
-                    try:
-                        t1 = datetime.strptime(hora_excel, "%H:%M")
-                        t2 = datetime.strptime(hora_pdf, "%H:%M")
-                        hora_delta = abs((t1 - t2).total_seconds())
-                        hora_ok = hora_delta <= 600
-                    except:
-                        pass
-
-                candidatos.append({
-                    "idx": idx,
-                    "nome_pdf": nome_pdf,
-                    "valor_pdf": valor_pdf,
-                    "hora_pdf": hora_pdf,
-                    "data_pdf": data_pdf,
-                    "sim": sim,
-                    "hora_ok": hora_ok,
-                    "hora_delta": hora_delta,
-                    "usado": usado
-                })
-
-            
-
-        if candidatos:
-            candidatos = sorted(
-                candidatos,
-                key=lambda x: (x["usado"], not x["hora_ok"], -x["sim"], x["hora_delta"])
-            )
-            escolhido = candidatos[0]
-
-        # CASO CONFIRA
-        if escolhido and abs(valor_excel - escolhido["valor_pdf"]) < 0.01 and (
-            escolhido["sim"] >= 0.55 or
-            normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel)) or
-            normalizar(nome_excel).startswith(normalizar(escolhido["nome_pdf"]))
-        ):
-            usados_pdf.add(escolhido["idx"])
-            conferidos.append({
-                "agente": agente_excel,
-                "nome_excel": nome_excel,
-                "nome_pdf": escolhido["nome_pdf"],
-                "valor_excel": valor_excel,
-                "valor_pdf": escolhido["valor_pdf"],
-                "hora_excel": hora_excel,
-                "hora_pdf": escolhido["hora_pdf"],
-                "data_pdf": escolhido["data_pdf"].strftime("%d/%m/%Y") if escolhido["data_pdf"] else "",
-                "similaridade": round(escolhido["sim"], 2),
-                "analise": "ok",
-                "banco": dados_pdf[escolhido["idx"]].get("banco")  # ok
-            })
-        else:
-            possivel = None
-            melhor_sim = 0
-            for p in dados_pdf:
-                sim_nome = similaridade(item.get("nome", ""), p.get("nome", ""))
-                if sim_nome > melhor_sim:
-                    melhor_sim = sim_nome
-                    possivel = p
-
-            motivo = "Nenhum parecido encontrado no PDF."
-            # --- CORREÇÃO AQUI: NÃO USAR pdf_resp (fora do escopo) ---
-            banco_possivel = ""
-            if possivel:
-                val_dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
-                val_msg = "igual" if val_dif < 0.01 else ("próximo" if val_dif < 0.20 else "diferente")
-                motivo = (
-                    f"Nome semelhante encontrado: '{possivel.get('nome')}' "
-                    f"(Sim={melhor_sim:.2f}), valor {val_msg} "
-                    f"(R${(possivel.get('valor') or 0):.2f})."
+    
+        usados_pdf = set()
+        conferidos = []
+        faltando_no_pdf = []
+        faltando_no_excel = []
+    
+        # ==========================================================
+        # 4.1️⃣ Excel → PDF
+        # ==========================================================
+        for item in dados_excel:
+            nome_excel = item.get("nome", "").strip()
+            valor_excel = round(item.get("valor") or 0.0, 2)
+            hora_excel = normalizar_hora(item.get("hora", ""))
+            agente_excel = (item.get("agente") or "").strip()
+    
+            escolhido = None
+            candidatos = []
+    
+            for idx, p in enumerate(dados_pdf):
+                nome_pdf = (p.get("nome") or "").strip()
+                valor_pdf = round(p.get("valor") or 0.0, 2)
+                hora_pdf = normalizar_hora(p.get("hora", ""))
+                data_pdf = try_parse_date(str(p.get("data", "")))
+                usado = idx in usados_pdf
+    
+                if abs(valor_excel - valor_pdf) < 0.01:
+                    sim = similaridade(nome_excel, nome_pdf)
+    
+                    hora_ok = True
+                    hora_delta = 999999
+                    if hora_excel and hora_pdf:
+                        try:
+                            t1 = datetime.strptime(hora_excel, "%H:%M")
+                            t2 = datetime.strptime(hora_pdf, "%H:%M")
+                            hora_delta = abs((t1 - t2).total_seconds())
+                            hora_ok = hora_delta <= 600
+                        except:
+                            pass
+    
+                    candidatos.append({
+                        "idx": idx,
+                        "nome_pdf": nome_pdf,
+                        "valor_pdf": valor_pdf,
+                        "hora_pdf": hora_pdf,
+                        "data_pdf": data_pdf,
+                        "sim": sim,
+                        "hora_ok": hora_ok,
+                        "hora_delta": hora_delta,
+                        "usado": usado
+                    })
+    
+                
+    
+            if candidatos:
+                candidatos = sorted(
+                    candidatos,
+                    key=lambda x: (x["usado"], not x["hora_ok"], -x["sim"], x["hora_delta"])
                 )
-                banco_possivel = possivel.get("banco", "") or ""
-
-            # preferir banco do 'possivel', senão manter qualquer banco já no item, senão vazio
-            item["motivo"] = motivo
-            item["banco_possivel"] = banco_possivel
-            item["banco"] = banco_possivel or item.get("banco", "") or ""
-            faltando_no_pdf.append(item)
-
-
-
-    # ==========================================================
-    # 4.2️⃣ PDF → Excel (sobras do PDF)
-    # ==========================================================
-    for i, p in enumerate(dados_pdf):
-        if i not in usados_pdf:
-            faltando_no_excel.append({
-                "nome": p.get("nome"),
-                "hora": normalizar_hora(p.get("hora")),
-                "valor": round(p.get("valor", 0.0), 2),
-                "data": p.get("data", ""),
-                "banco": p.get("banco", "")
-            })
-
-    # ==========================================================
-    # 5️⃣ RETORNO
-    # ==========================================================
-    return {
-        "banco": ", ".join(bancos_detectados),
-        "conferidos": conferidos,
-        "faltando_no_pdf": faltando_no_pdf,
-        "faltando_no_excel": faltando_no_excel,
-        "meta": {
-            "data_filtrada": selected_date.isoformat() if selected_date else None,
-            "filtro_aplicado_no": "PDF",
-            "criterios": {
-                "tolerancia_valor": "exato",
-                "similaridade_minima": 0.6,
-                "tolerancia_hora": "±10min"
+                escolhido = candidatos[0]
+    
+            # CASO CONFIRA
+            if escolhido and abs(valor_excel - escolhido["valor_pdf"]) < 0.01 and (
+                escolhido["sim"] >= 0.55 or
+                normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel)) or
+                normalizar(nome_excel).startswith(normalizar(escolhido["nome_pdf"]))
+            ):
+                usados_pdf.add(escolhido["idx"])
+                conferidos.append({
+                    "agente": agente_excel,
+                    "nome_excel": nome_excel,
+                    "nome_pdf": escolhido["nome_pdf"],
+                    "valor_excel": valor_excel,
+                    "valor_pdf": escolhido["valor_pdf"],
+                    "hora_excel": hora_excel,
+                    "hora_pdf": escolhido["hora_pdf"],
+                    "data_pdf": escolhido["data_pdf"].strftime("%d/%m/%Y") if escolhido["data_pdf"] else "",
+                    "similaridade": round(escolhido["sim"], 2),
+                    "analise": "ok",
+                    "banco": dados_pdf[escolhido["idx"]].get("banco")  # ok
+                })
+            else:
+                possivel = None
+                melhor_sim = 0
+                for p in dados_pdf:
+                    sim_nome = similaridade(item.get("nome", ""), p.get("nome", ""))
+                    if sim_nome > melhor_sim:
+                        melhor_sim = sim_nome
+                        possivel = p
+    
+                motivo = "Nenhum parecido encontrado no PDF."
+                # --- CORREÇÃO AQUI: NÃO USAR pdf_resp (fora do escopo) ---
+                banco_possivel = ""
+                if possivel:
+                    val_dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
+                    val_msg = "igual" if val_dif < 0.01 else ("próximo" if val_dif < 0.20 else "diferente")
+                    motivo = (
+                        f"Nome semelhante encontrado: '{possivel.get('nome')}' "
+                        f"(Sim={melhor_sim:.2f}), valor {val_msg} "
+                        f"(R${(possivel.get('valor') or 0):.2f})."
+                    )
+                    banco_possivel = possivel.get("banco", "") or ""
+    
+                # preferir banco do 'possivel', senão manter qualquer banco já no item, senão vazio
+                item["motivo"] = motivo
+                item["banco_possivel"] = banco_possivel
+                item["banco"] = banco_possivel or item.get("banco", "") or ""
+                faltando_no_pdf.append(item)
+    
+    
+    
+        # ==========================================================
+        # 4.2️⃣ PDF → Excel (sobras do PDF)
+        # ==========================================================
+        for i, p in enumerate(dados_pdf):
+            if i not in usados_pdf:
+                faltando_no_excel.append({
+                    "nome": p.get("nome"),
+                    "hora": normalizar_hora(p.get("hora")),
+                    "valor": round(p.get("valor", 0.0), 2),
+                    "data": p.get("data", ""),
+                    "banco": p.get("banco", "")
+                })
+    
+        # ==========================================================
+        # 5️⃣ RETORNO
+        # ==========================================================
+        return {
+            "banco": ", ".join(bancos_detectados),
+            "conferidos": conferidos,
+            "faltando_no_pdf": faltando_no_pdf,
+            "faltando_no_excel": faltando_no_excel,
+            "meta": {
+                "data_filtrada": selected_date.isoformat() if selected_date else None,
+                "filtro_aplicado_no": "PDF",
+                "criterios": {
+                    "tolerancia_valor": "exato",
+                    "similaridade_minima": 0.6,
+                    "tolerancia_hora": "±10min"
+                }
             }
         }
-    }
+except Exception as e:
+        tb = traceback.format_exc()
+        print("ERRO FATAL em /conferir_caixa:\n", tb)
+        # retorna JSON legível para o frontend
+        return {"erro": f"Erro interno no servidor: {str(e)}"}
+
 
 
