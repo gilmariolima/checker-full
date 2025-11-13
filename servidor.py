@@ -331,7 +331,7 @@ async def detalhe_bb(file_bytes: bytes):
             valor = float(valor_txt.replace(".", "").replace(",", "."))
         except:
             continue
-        dados.append({"data": f"{data_curta}/2025", "hora": hora, "nome": nome, "valor": valor})
+        dados.append({"data": f"{data_curta}/2025", "hora": hora, "nome": nome, "valor": valor, "banco": "BB"})
 
     # ==========================================================
     # 🧹 Limpeza final: remover duplicatas e ordenar
@@ -359,12 +359,57 @@ async def detalhe_bb(file_bytes: bytes):
     return {"banco": "bb", "dados": dados}
 
 # ==========================================================
-# 🟢 DETALHE BANCO C6 (versão robusta com data real)
+# 🟢 DETALHE BANCO C6 (versão robusta com desbloqueio automático)
 # ==========================================================
-def detalhe_c6(texto_total: str):
+async def detalhe_c6(file_bytes: bytes, senha: str = None):
+    """
+    Extrai transações PIX de PDFs do C6 Bank.
+    Se o PDF estiver bloqueado, tenta desbloquear automaticamente com pikepdf.
+    """
+    texto_total = ""
+
+    # 1️⃣ Tenta abrir diretamente
+    try:
+        with pdfplumber.open(io.BytesIO(file_bytes), password=senha or None) as pdf:
+            for page in pdf.pages:
+                texto_total += "\n" + (page.extract_text() or "")
+
+    except Exception as e:
+        erro_str = str(e).lower()
+        print("⚠️ Falha ao abrir PDF C6:", erro_str)
+
+        # 2️⃣ Se bloqueado, tenta desbloquear com pikepdf
+        if any(word in erro_str for word in ["password", "encrypt", "decrypt", "permiss"]):
+            print("🔓 Tentando desbloquear PDF C6 com pikepdf...")
+
+            try:
+                pdf_desbloqueado = pikepdf.open(io.BytesIO(file_bytes))
+                buffer = io.BytesIO()
+                pdf_desbloqueado.save(buffer)
+                buffer.seek(0)
+
+                with pdfplumber.open(buffer) as pdf:
+                    for page in pdf.pages:
+                        texto_total += "\n" + (page.extract_text() or "")
+                print("✅ PDF C6 desbloqueado e processado com sucesso.")
+
+            except pikepdf._qpdf.PasswordError:
+                return {"erro": "O PDF C6 está protegido por senha. Informe a senha para continuar."}
+            except Exception as e2:
+                return {"erro": f"Falha ao desbloquear PDF C6: {e2}"}
+        else:
+            return {"erro": f"Erro ao abrir PDF C6: {e}"}
+
+    # 3️⃣ Continua com o parser normal
+    return {"dados": extrair_pix_c6(texto_total)}
+
+
+# ==========================================================
+# 🧩 PARSER DE TEXTO - C6 (idêntico ao seu, com refinamento)
+# ==========================================================
+def extrair_pix_c6(texto_total: str):
     texto_limpo = re.sub(r"\s+", " ", texto_total)
 
-    # 🔹 Captura todas as ocorrências de Pix recebido + data e valor, tolerante a ruído
     padrao = re.compile(
         r"(\d{2}/\d{2})(?:/\d{4})?.{0,30}?Pix\s+recebid[oa](?:\s+c6)?\s+(?:de\s+)?([A-Za-zÀ-ÿ0-9\.\-\,\s]+?)\s+R\$?\s*([\d\.,]+)(?:\s+às\s+(\d{2}:\d{2}))?",
         re.IGNORECASE
@@ -373,11 +418,8 @@ def detalhe_c6(texto_total: str):
     dados = []
     for m in padrao.finditer(texto_limpo):
         data_curta, nome_raw, valor_txt, hora = m.groups()
-        # Completa ano: se vier dd/mm/yyyy usa; se vier dd/mm, completa com ano atual
-        if re.match(r"\d{2}/\d{2}/\d{4}", data_curta or ""):
-            data = data_curta
-        else:
-            data = f"{data_curta}/2025"
+        ano = datetime.now().year
+        data = f"{data_curta}/" + (data_curta if "/" in data_curta else str(ano))
         nome = re.sub(r"\s{2,}", " ", (nome_raw or "").strip()).title()
         valor_txt = (valor_txt or "").replace(".", "").replace(",", ".")
         try:
@@ -386,11 +428,9 @@ def detalhe_c6(texto_total: str):
             continue
         hora = hora or ""
 
-        # evitar duplicatas exatas
-        if not any(d["nome"] == nome and abs(d["valor"] - valor) < 0.01 and d.get("hora","")==hora for d in dados):
-            dados.append({"data": data, "nome": nome, "valor": valor, "hora": hora})
+        if not any(d["nome"] == nome and abs(d["valor"] - valor) < 0.01 and d.get("hora", "") == hora for d in dados):
+            dados.append({"data": data, "nome": nome, "valor": valor, "hora": hora, "banco": "C6"})
 
-    # Se não encontrou, tenta uma alternativa simples (datas no início da linha)
     if not dados:
         linhas = re.split(r"\n+", texto_limpo)
         for ln in linhas:
@@ -400,16 +440,14 @@ def detalhe_c6(texto_total: str):
                 valor_txt = m2.group(2)
                 nome_match = re.search(r"Pix\s+recebid[oa].*?de\s+(.*?)\s+R\$", ln, re.IGNORECASE)
                 nome = (nome_match.group(1).strip().title() if nome_match else "(sem nome)")
-                data = f"{data_curta}/2025"
+                data = f"{data_curta}/{ano}"
                 try:
                     valor = float(valor_txt.replace(".", "").replace(",", "."))
                 except:
                     continue
                 dados.append({"data": data, "nome": nome, "valor": valor, "hora": ""})
 
-    # ==========================================================
-    # 🪵 LOG FINAL - igual ao Banco do Brasil
-    # ==========================================================
+    # LOG FINAL
     print(f"\n========== [LOG - PIX RECEBIDOS C6 BANK - FINAL] ==========")
     print(f"Total detectado: {len(dados)}\n")
     for i, d in enumerate(dados, start=1):
@@ -421,7 +459,8 @@ def detalhe_c6(texto_total: str):
 # ==========================================================
 # 🔍 PROCESSAR PDF → Detecta e chama o parser correto
 # ==========================================================
-async def processar_pdf(file_bytes: bytes):
+async def processar_pdf(file_bytes: bytes, senha: str = None):
+
     texto_total = ""
     try:
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
@@ -435,13 +474,19 @@ async def processar_pdf(file_bytes: bytes):
 
     if "C6" in upper or "C6BANK" in upper:
         banco = "c6"
-        dados = detalhe_c6(texto_total)
+        # ✅ Chamar com await e passando os bytes corretos
+        resp = await detalhe_c6(file_bytes, senha)
+        dados = resp.get("dados", [])
+        for d in dados:
+            d["banco"] = "C6"
 
     elif "BANCO DO BRASIL" in upper or "EXTRATO DE CONTA" in upper or "BB S.A" in upper:
         banco = "bb"
         # 🟢 Chama corretamente a função assíncrona detalhe_bb (que lê os bytes)
         resp = await detalhe_bb(file_bytes)
-        dados = resp.get("dados", []) if isinstance(resp, dict) else []
+        dados = resp.get("dados", [])
+        for d in dados:
+            d["banco"] = "BB"
 
     else:
         banco = "desconhecido"
@@ -451,6 +496,8 @@ async def processar_pdf(file_bytes: bytes):
         return {"erro": f"Nenhum lançamento PIX identificado no PDF do banco {banco.upper()}."}
 
     return {"banco": banco, "dados": dados}
+
+
 async def processar_excel(file_bytes: bytes):
     def normalizar_hora_excel(h: str) -> str:
         """Aceita 7h58, 758, 07:58, 07.58, 7, 07:58:00 → retorna HH:MM"""
@@ -520,19 +567,53 @@ async def processar_excel(file_bytes: bytes):
 
 from typing import List
 from datetime import datetime, timedelta
+
+# ==========================================================
+# 🧾 ROTA PRINCIPAL /conferir_caixa — MULTIPLOS PDF
+# ==========================================================
 @app.post("/conferir_caixa")
 async def conferir_caixa(
-    pdf: UploadFile = File(...),
+    pdfs: List[UploadFile] = File(...),   # AGORA ACEITA MÚLTIPLOS PDFs
     excels: List[UploadFile] = File(...),
-    data: str = Form(None)
+    data: str = Form(None),
+    senha: str = Form(None)
 ):
-    pdf_bytes = await pdf.read()
+    todos_pdf = []       # ← PIX DO C6 + BB
+    bancos_detectados = set()
 
-    # 🟢 Processar PDF
-    pdf_resp = await processar_pdf(pdf_bytes)
-    dados_pdf = pdf_resp.get("dados", []) if isinstance(pdf_resp, dict) else []
+    # ==========================================================
+    # 1️⃣ PROCESSAR CADA PDF ENVIADO
+    # ==========================================================
+    for pdf in pdfs:
+        try:
+            pdf_bytes = await pdf.read()
+            pdf_resp = await processar_pdf(pdf_bytes, senha)
 
-    # 🟢 Processar múltiplos Excel
+            if "erro" in pdf_resp:
+                print(f"⚠️ PDF ignorado ({pdf.filename}): {pdf_resp['erro']}")
+                continue
+
+            bancos_detectados.add(pdf_resp.get("banco", "").upper())
+            dados_pdf_local = pdf_resp.get("dados", [])
+            todos_pdf.extend(dados_pdf_local)
+
+            print(f"\n🏦 PDF: {pdf.filename}")
+            print(f"Banco detectado: {pdf_resp.get('banco')}")
+            print(f"PIX encontrados: {len(dados_pdf_local)}")
+
+        except Exception as e:
+            print(f"❌ Erro lendo PDF {pdf.filename}: {e}")
+
+    if not todos_pdf:
+        return {"erro": "Nenhum PDF válido ou sem PIX encontrado."}
+
+    print(f"\n📌 TOTAL GERAL DE PIX (C6 + BB): {len(todos_pdf)}\n")
+
+    dados_pdf = todos_pdf
+
+    # ==========================================================
+    # 2️⃣ PROCESSAR EXCELS
+    # ==========================================================
     dados_excel = []
     for excel in excels:
         try:
@@ -548,13 +629,13 @@ async def conferir_caixa(
         return {"erro": "Nenhum dado válido encontrado nas planilhas enviadas."}
 
     # ==========================================================
-    # 📅 FILTRAR PDF PELA DATA (se informada)
+    # 3️⃣ FILTRO POR DATA
     # ==========================================================
     selected_date = None
     if data:
         try:
             selected_date = datetime.strptime(data.strip(), "%Y-%m-%d").date()
-        except Exception:
+        except:
             selected_date = try_parse_date(data.strip())
 
     if selected_date:
@@ -563,11 +644,9 @@ async def conferir_caixa(
         print(f"\n📅 Filtro aplicado no PDF ({selected_date.strftime('%d/%m/%Y')})")
         print(f"   PDF: {total_pdf_antes} → {len(dados_pdf)} após filtro")
         print("=" * 60)
-    if not dados_pdf:
-        print("⚠️ Nenhum registro do PDF corresponde à data filtrada.")
 
     # ==========================================================
-    # 🔁 CONFERÊNCIA: Excel completo × PDF filtrado
+    # 4️⃣ CONFERÊNCIA PRINCIPAL
     # ==========================================================
     def normalizar(s: str):
         s = unicodedata.normalize("NFKD", s or "")
@@ -578,34 +657,35 @@ async def conferir_caixa(
         return SequenceMatcher(None, normalizar(n1), normalizar(n2)).ratio()
 
     def normalizar_hora(h: str) -> str:
-        """Aceita formatos como 12:30, 12h30, 8h05, 7h, 730 e retorna HH:MM"""
         if not h:
             return ""
         h = str(h).strip().lower().replace(" ", "")
         h = h.replace("h", ":")
-        # Ex: 8:5 → 08:05
         if re.fullmatch(r"^\d{1,2}[:\.]\d{1,2}$", h):
-            partes = re.split(r"[:\.]", h)
-            return f"{int(partes[0]):02d}:{int(partes[1]):02d}"
-        # Ex: 730 → 07:30
+            p = re.split(r"[:\.]", h)
+            return f"{int(p[0]):02d}:{int(p[1]):02d}"
         if re.fullmatch(r"^\d{3,4}$", h):
             return f"{int(h[:-2]):02d}:{int(h[-2:]):02d}"
-        # Ex: 7 → 07:00
         if re.fullmatch(r"^\d{1,2}$", h):
             return f"{int(h):02d}:00"
-        # Já no formato certo
         if re.fullmatch(r"^\d{2}:\d{2}$", h):
             return h
         return ""
 
     usados_pdf = set()
-    conferidos, faltando_no_pdf, faltando_no_excel = [], [], []
+    conferidos = []
+    faltando_no_pdf = []
+    faltando_no_excel = []
 
+    # ==========================================================
+    # 4.1️⃣ Excel → PDF
+    # ==========================================================
     for item in dados_excel:
         nome_excel = item.get("nome", "").strip()
         valor_excel = round(item.get("valor") or 0.0, 2)
         hora_excel = normalizar_hora(item.get("hora", ""))
         agente_excel = (item.get("agente") or "").strip()
+
         escolhido = None
         candidatos = []
 
@@ -618,16 +698,18 @@ async def conferir_caixa(
 
             if abs(valor_excel - valor_pdf) < 0.01:
                 sim = similaridade(nome_excel, nome_pdf)
+
                 hora_ok = True
-                hora_delta_seconds = 999999
+                hora_delta = 999999
                 if hora_excel and hora_pdf:
                     try:
                         t1 = datetime.strptime(hora_excel, "%H:%M")
                         t2 = datetime.strptime(hora_pdf, "%H:%M")
-                        hora_delta_seconds = abs((t1 - t2).total_seconds())
-                        hora_ok = hora_delta_seconds <= 600  # ±10min
+                        hora_delta = abs((t1 - t2).total_seconds())
+                        hora_ok = hora_delta <= 600
                     except:
                         pass
+
                 candidatos.append({
                     "idx": idx,
                     "nome_pdf": nome_pdf,
@@ -636,11 +718,10 @@ async def conferir_caixa(
                     "data_pdf": data_pdf,
                     "sim": sim,
                     "hora_ok": hora_ok,
-                    "hora_delta": hora_delta_seconds,
+                    "hora_delta": hora_delta,
                     "usado": usado
                 })
 
-        # 🔎 Melhor candidato
         if candidatos:
             candidatos = sorted(
                 candidatos,
@@ -648,26 +729,13 @@ async def conferir_caixa(
             )
             escolhido = candidatos[0]
 
+        # CASO CONFIRA
         if escolhido and abs(valor_excel - escolhido["valor_pdf"]) < 0.01 and (
-            escolhido["sim"] >= 0.55 or (
-                normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel))
-                or normalizar(nome_excel).startswith(normalizar(escolhido["nome_pdf"]))
-            )
+            escolhido["sim"] >= 0.55 or
+            normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel)) or
+            normalizar(nome_excel).startswith(normalizar(escolhido["nome_pdf"]))
         ):
-            idx = escolhido["idx"]
-            usados_pdf.add(idx)
-
-            nome_status = (
-                "mesmo nome" if normalizar(nome_excel) == normalizar(escolhido["nome_pdf"]) else
-                "parecido" if escolhido["sim"] >= 0.6 else "diferente"
-            )
-            valor_status = "exato"
-            hora_status = (
-                "sem hora" if not hora_excel and not escolhido["hora_pdf"] else
-                "exato" if hora_excel == escolhido["hora_pdf"] else
-                "próximo" if escolhido["hora_ok"] else "diferente"
-            )
-
+            usados_pdf.add(escolhido["idx"])
             conferidos.append({
                 "agente": agente_excel,
                 "nome_excel": nome_excel,
@@ -679,9 +747,8 @@ async def conferir_caixa(
                 "data_pdf": escolhido["data_pdf"].strftime("%d/%m/%Y") if escolhido["data_pdf"] else "",
                 "similaridade": round(escolhido["sim"], 2),
                 "analise": "ok",
-                "nome_status": nome_status,
-                "valor_status": valor_status,
-                "hora_status": hora_status
+                "banco": dados_pdf[escolhido["idx"]].get("banco")  # 🔥 aqui
+
             })
         else:
             possivel = None
@@ -694,31 +761,35 @@ async def conferir_caixa(
 
             motivo = "Nenhum parecido encontrado no PDF."
             if possivel:
-                val_dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
-                val_msg = "igual" if val_dif < 0.01 else ("próximo" if val_dif < 0.20 else "diferente")
+                dif = abs((item.get("valor") or 0) - (possivel.get("valor") or 0))
+                val_msg = "igual" if dif < 0.01 else ("próximo" if dif < 0.20 else "diferente")
                 motivo = (
                     f"Nome semelhante encontrado: '{possivel.get('nome')}' "
                     f"(Sim={melhor_sim:.2f}), valor {val_msg} "
                     f"(R${(possivel.get('valor') or 0):.2f})."
                 )
+
             item["motivo"] = motivo
             faltando_no_pdf.append(item)
 
-    # 📘 PDF → o que sobrou não está no Excel
+    # ==========================================================
+    # 4.2️⃣ PDF → Excel (sobras do PDF)
+    # ==========================================================
     for i, p in enumerate(dados_pdf):
         if i not in usados_pdf:
             faltando_no_excel.append({
                 "nome": p.get("nome"),
                 "hora": normalizar_hora(p.get("hora")),
                 "valor": round(p.get("valor", 0.0), 2),
-                "data": p.get("data", "")
+                "data": p.get("data", ""),
+                "banco": p.get("banco", "")
             })
 
     # ==========================================================
-    # 🧾 Retorno final
+    # 5️⃣ RETORNO
     # ==========================================================
     return {
-        "banco": pdf_resp.get("banco", ""),
+        "banco": ", ".join(bancos_detectados),
         "conferidos": conferidos,
         "faltando_no_pdf": faltando_no_pdf,
         "faltando_no_excel": faltando_no_excel,
@@ -731,5 +802,4 @@ async def conferir_caixa(
                 "tolerancia_hora": "±10min"
             }
         }
-
     }
