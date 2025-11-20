@@ -730,6 +730,9 @@ async def conferir_caixa(
         escolhido = None
         candidatos = []
 
+        # ======================================================
+        # Procurar PDF com valor EXATO
+        # ======================================================
         for idx, p in enumerate(dados_pdf):
             nome_pdf = p["nome"]
             valor_pdf = round(p.get("valor") or 0.0, 2)
@@ -737,8 +740,32 @@ async def conferir_caixa(
             usado = idx in usados_pdf
 
             if abs(valor_excel - valor_pdf) < 0.01:
+                # ------------------------------------------------------
+                # SIMILARIDADE COM BOOST INTELIGENTE
+                # ------------------------------------------------------
                 sim = similaridade(nome_excel, nome_pdf)
 
+                nome_excel_norm = normalizar(nome_excel)
+                nome_pdf_norm  = normalizar(nome_pdf)
+
+                # 1️⃣ Excel está contido no PDF → caso Clotilde
+                if nome_excel_norm in nome_pdf_norm:
+                    sim = max(sim, 0.90)
+
+                # 2️⃣ PDF está contido no Excel
+                elif nome_pdf_norm in nome_excel_norm:
+                    sim = max(sim, 0.90)
+
+                # 3️⃣ Alguma palavra igual → reforçar
+                else:
+                    partes_excel = set(nome_excel_norm.split())
+                    partes_pdf   = set(nome_pdf_norm.split())
+                    if partes_excel.intersection(partes_pdf):
+                        sim = max(sim, min(0.75, sim + 0.20))
+
+                # ------------------------------------------------------
+                # Horário
+                # ------------------------------------------------------
                 hora_ok = True
                 hora_delta = 999999
                 if hora_excel and hora_pdf:
@@ -750,6 +777,9 @@ async def conferir_caixa(
                     except:
                         pass
 
+                # ------------------------------------------------------
+                # Registrar candidato
+                # ------------------------------------------------------
                 candidatos.append({
                     "idx": idx,
                     "sim": sim,
@@ -762,12 +792,16 @@ async def conferir_caixa(
                     "data_pdf": p.get("data"),
                 })
 
-        # Melhor candidato
+        # ======================================================
+        # Escolher melhor candidato de valor EXATO
+        # ======================================================
         if candidatos:
             candidatos.sort(key=lambda x: (x["usado"], not x["hora_ok"], -x["sim"], x["hora_delta"]))
             escolhido = candidatos[0]
 
-        # Conferiu?
+        # ======================================================
+        # Conferiu? (valor exato)
+        # ======================================================
         if escolhido and (
             escolhido["sim"] >= 0.50 or
             normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel)) or
@@ -797,37 +831,50 @@ async def conferir_caixa(
         valor_pdf = 0
         hora_pdf = ""
 
+        # 1️⃣ Filtrar por valores próximos (± 0,50)
+        candidatos_valor = []
         for p in dados_pdf:
-            sim = similaridade(nome_excel, p["nome"])
             dif_valor = abs(valor_excel - round(p.get("valor", 0), 2))
-            dif_hora = 999999
+            if dif_valor <= 0.50:
+                candidatos_valor.append(p)
 
-            hx = hora_excel
-            hp = normalizar_hora(p.get("hora", ""))
+        # Se existirem candidatos por valor → restringe busca
+        lista_busca = candidatos_valor if candidatos_valor else dados_pdf
 
-            if hx and hp:
-                try:
-                    hx_t = datetime.strptime(hx, "%H:%M")
-                    hp_t = datetime.strptime(hp, "%H:%M")
-                    dif_hora = abs((hx_t - hp_t).total_seconds())
-                except:
-                    pass
+        for p in lista_busca:
+            nome_pdf = p["nome"]
+            sim = similaridade(nome_excel, nome_pdf)
 
-            # peso da sugestão
-            pontuacao = (sim * 100) - (dif_valor * 2) - (dif_hora / 1800)
+            nome_excel_norm = normalizar(nome_excel)
+            nome_pdf_norm  = normalizar(nome_pdf)
+
+            # Aplicar reforço também aqui
+            if nome_excel_norm in nome_pdf_norm:
+                sim = max(sim, 0.90)
+            elif nome_pdf_norm in nome_excel_norm:
+                sim = max(sim, 0.90)
+            else:
+                partes_excel = set(nome_excel_norm.split())
+                partes_pdf   = set(nome_pdf_norm.split())
+                if partes_excel.intersection(partes_pdf):
+                    sim = max(sim, min(0.75, sim + 0.20))
+
+            dif_valor = abs(valor_excel - round(p.get("valor", 0), 2))
+
+            pontuacao = (sim * 100) - (dif_valor * 1)
 
             if pontuacao > melhor_pontuacao:
                 melhor_pontuacao = pontuacao
                 possivel = p
                 valor_pdf = p.get("valor", 0)
-                hora_pdf = hp
+                hora_pdf = normalizar_hora(p.get("hora", ""))
 
-        # criar motivo
+        # Criar motivo
         if possivel:
             val_dif = abs(valor_excel - valor_pdf)
             val_msg = (
                 "igual" if val_dif < 0.01 else
-                "próximo" if val_dif < 0.20 else
+                "próximo" if val_dif <= 0.50 else
                 "diferente"
             )
             motivo = (
@@ -842,6 +889,8 @@ async def conferir_caixa(
 
         item["motivo"] = motivo
         faltando_no_pdf.append(item)
+
+
 
     # ==========================================================
     # 5️⃣ PDF → Excel (não usados)
