@@ -309,10 +309,6 @@ async def detalhe_bb(file_bytes: bytes):
             cnpj_num = re.sub(r"\D", "", nome_limpo)
             nome_limpo = f"Cliente CNPJ {cnpj_num}"
 
-        # Corrige nomes truncados comuns (terminam abruptamente com 2 letras)
-        if re.match(r".{3,}\s+[A-ZÀ-Úa-zà-ú]{1,2}$", nome_limpo):
-            nome_limpo = nome_limpo + " (incompleto)"
-
         nome = nome_limpo
 
         dados.append({
@@ -623,9 +619,7 @@ async def processar_excel(file_bytes: bytes):
 from typing import List
 from datetime import datetime, timedelta
 
-# ==========================================================
-# 🧾 ROTA PRINCIPAL /conferir_caixa — MULTIPLOS PDF
-# ==========================================================
+
 @app.post("/conferir_caixa")
 async def conferir_caixa(
     pdfs: List[UploadFile] = File(...),
@@ -636,33 +630,30 @@ async def conferir_caixa(
     todos_pdf = []
     bancos_detectados = set()
 
-    # ==========================================================
-    # 1️⃣ PROCESSAR PDFS
-    # ==========================================================
+    # ============================
+    # PROCESSAR PDFs
+    # ============================
     for pdf in pdfs:
         try:
             pdf_bytes = await pdf.read()
             pdf_resp = await processar_pdf(pdf_bytes, senha)
 
             if "erro" in pdf_resp:
-                print(f"⚠️ PDF ignorado ({pdf.filename}): {pdf_resp['erro']}")
                 continue
 
             bancos_detectados.add(pdf_resp.get("banco", "").upper())
-            dados_pdf_local = pdf_resp.get("dados", [])
-            todos_pdf.extend(dados_pdf_local)
-
-        except Exception as e:
-            print(f"❌ Erro lendo PDF {pdf.filename}: {e}")
+            todos_pdf.extend(pdf_resp.get("dados", []))
+        except:
+            pass
 
     if not todos_pdf:
         return {"erro": "Nenhum PDF válido ou sem PIX encontrado."}
 
     dados_pdf = todos_pdf
 
-    # ==========================================================
-    # 2️⃣ PROCESSAR EXCELS
-    # ==========================================================
+    # ============================
+    # PROCESSAR EXCELS
+    # ============================
     dados_excel = []
     for excel in excels:
         excel_bytes = await excel.read()
@@ -673,9 +664,9 @@ async def conferir_caixa(
     if not dados_excel:
         return {"erro": "Nenhum dado válido encontrado nas planilhas enviadas."}
 
-    # ==========================================================
-    # 3️⃣ FILTRAR POR DATA (opcional)
-    # ==========================================================
+    # ============================
+    # FILTRAR POR DATA
+    # ============================
     selected_date = None
     if data:
         try:
@@ -686,10 +677,9 @@ async def conferir_caixa(
     if selected_date:
         dados_pdf = filter_items_by_date(dados_pdf, selected_date)
 
-    # ==========================================================
-    # Funções auxiliares
-    # ==========================================================
-
+    # ============================
+    # FUNÇÕES AUXILIARES
+    # ============================
     def normalizar(s: str):
         s = unicodedata.normalize("NFKD", s or "")
         s = "".join(c for c in s if not unicodedata.combining(c))
@@ -702,15 +692,20 @@ async def conferir_caixa(
         if not h:
             return ""
         h = h.strip().lower().replace("h", ":").replace(".", ":")
+
         if re.fullmatch(r"\d{1,2}$", h):
             return f"{int(h):02d}:00"
+
         if re.fullmatch(r"\d{3,4}$", h):
             return f"{int(h[:-2]):02d}:{int(h[-2:]):02d}"
+
         if re.fullmatch(r"\d{1,2}:\d{1,2}$", h):
             p = h.split(":")
             return f"{int(p[0]):02d}:{int(p[1]):02d}"
+
         if re.fullmatch(r"\d{2}:\d{2}:\d{2}$", h):
             return h[:5]
+
         return ""
 
     usados_pdf = set()
@@ -718,9 +713,9 @@ async def conferir_caixa(
     faltando_no_pdf = []
     faltando_no_excel = []
 
-    # ==========================================================
-    # 4️⃣ Excel → PDF
-    # ==========================================================
+    # ============================
+    # MATCH Excel → PDF
+    # ============================
     for item in dados_excel:
         nome_excel = item["nome"]
         valor_excel = round(item.get("valor") or 0.0, 2)
@@ -730,9 +725,9 @@ async def conferir_caixa(
         escolhido = None
         candidatos = []
 
-        # ======================================================
-        # Procurar PDF com valor EXATO
-        # ======================================================
+        # ============================
+        # CANDIDATOS COM VALOR IGUAL
+        # ============================
         for idx, p in enumerate(dados_pdf):
             nome_pdf = p["nome"]
             valor_pdf = round(p.get("valor") or 0.0, 2)
@@ -740,34 +735,23 @@ async def conferir_caixa(
             usado = idx in usados_pdf
 
             if abs(valor_excel - valor_pdf) < 0.01:
-                # ------------------------------------------------------
-                # SIMILARIDADE COM BOOST INTELIGENTE
-                # ------------------------------------------------------
                 sim = similaridade(nome_excel, nome_pdf)
 
-                nome_excel_norm = normalizar(nome_excel)
-                nome_pdf_norm  = normalizar(nome_pdf)
+                ne = normalizar(nome_excel)
+                np = normalizar(nome_pdf)
 
-                # 1️⃣ Excel está contido no PDF → caso Clotilde
-                if nome_excel_norm in nome_pdf_norm:
+                # boosts de similaridade
+                if ne in np:
                     sim = max(sim, 0.90)
-
-                # 2️⃣ PDF está contido no Excel
-                elif nome_pdf_norm in nome_excel_norm:
+                elif np in ne:
                     sim = max(sim, 0.90)
-
-                # 3️⃣ Alguma palavra igual → reforçar
                 else:
-                    partes_excel = set(nome_excel_norm.split())
-                    partes_pdf   = set(nome_pdf_norm.split())
-                    if partes_excel.intersection(partes_pdf):
+                    if set(ne.split()).intersection(set(np.split())):
                         sim = max(sim, min(0.75, sim + 0.20))
 
-                # ------------------------------------------------------
-                # Horário
-                # ------------------------------------------------------
                 hora_ok = True
                 hora_delta = 999999
+
                 if hora_excel and hora_pdf:
                     try:
                         t1 = datetime.strptime(hora_excel, "%H:%M")
@@ -777,9 +761,6 @@ async def conferir_caixa(
                     except:
                         pass
 
-                # ------------------------------------------------------
-                # Registrar candidato
-                # ------------------------------------------------------
                 candidatos.append({
                     "idx": idx,
                     "sim": sim,
@@ -792,20 +773,22 @@ async def conferir_caixa(
                     "data_pdf": p.get("data"),
                 })
 
-        # ======================================================
-        # Escolher melhor candidato de valor EXATO
-        # ======================================================
+        # escolher melhor candidato por valor igual
         if candidatos:
-            candidatos.sort(key=lambda x: (x["usado"], not x["hora_ok"], -x["sim"], x["hora_delta"]))
+            candidatos.sort(key=lambda x: (
+                x["usado"],
+                not x["hora_ok"],
+                -x["sim"],
+                x["hora_delta"]
+            ))
             escolhido = candidatos[0]
 
-        # ======================================================
-        # Conferiu? (valor exato)
-        # ======================================================
+        # ============================
+        # CONFIRMAR SE POSSÍVEL
+        # ============================
         if escolhido and (
-            escolhido["sim"] >= 0.50 or
-            normalizar(escolhido["nome_pdf"]).startswith(normalizar(nome_excel)) or
-            normalizar(nome_excel).startswith(normalizar(escolhido["nome_pdf"]))
+            escolhido["sim"] >= 0.70 or
+            (escolhido["sim"] >= 0.55 and abs(valor_excel - escolhido["valor_pdf"]) < 0.01)
         ):
             usados_pdf.add(escolhido["idx"])
             conferidos.append({
@@ -823,54 +806,69 @@ async def conferir_caixa(
             })
             continue
 
-        # ======================================================
-        # ❌ Não conferiu → agora calcular o "melhor possível"
-        # ======================================================
+        # ============================
+        # SUGESTÃO — VALOR PRÓXIMO
+        # ============================
         melhor_pontuacao = -999
         possivel = None
         valor_pdf = 0
         hora_pdf = ""
 
-        # 1️⃣ Filtrar por valores próximos (± 0,50)
         candidatos_valor = []
         for p in dados_pdf:
-            dif_valor = abs(valor_excel - round(p.get("valor", 0), 2))
-            if dif_valor <= 0.50:
+            if abs(valor_excel - round(p.get("valor", 0), 2)) <= 0.50:
                 candidatos_valor.append(p)
 
-        # Se existirem candidatos por valor → restringe busca
         lista_busca = candidatos_valor if candidatos_valor else dados_pdf
 
         for p in lista_busca:
             nome_pdf = p["nome"]
+            valor_pdf = round(p.get("valor") or 0.0, 2)
+            hora_pdf = normalizar_hora(p.get("hora", ""))
+
             sim = similaridade(nome_excel, nome_pdf)
 
-            nome_excel_norm = normalizar(nome_excel)
-            nome_pdf_norm  = normalizar(nome_pdf)
+            ne = normalizar(nome_excel)
+            np = normalizar(nome_pdf)
 
-            # Aplicar reforço também aqui
-            if nome_excel_norm in nome_pdf_norm:
+            if ne in np:
                 sim = max(sim, 0.90)
-            elif nome_pdf_norm in nome_excel_norm:
+            elif np in ne:
                 sim = max(sim, 0.90)
             else:
-                partes_excel = set(nome_excel_norm.split())
-                partes_pdf   = set(nome_pdf_norm.split())
-                if partes_excel.intersection(partes_pdf):
+                if set(ne.split()).intersection(set(np.split())):
                     sim = max(sim, min(0.75, sim + 0.20))
 
-            dif_valor = abs(valor_excel - round(p.get("valor", 0), 2))
+            dif_valor = abs(valor_excel - valor_pdf)
 
-            pontuacao = (sim * 100) - (dif_valor * 1)
+            # ======= BONUS DE HORÁRIO (CORREÇÃO) =======
+            hora_bonus = 0
+            if hora_excel and hora_pdf:
+                try:
+                    t1 = datetime.strptime(hora_excel, "%H:%M")
+                    t2 = datetime.strptime(hora_pdf, "%H:%M")
+                    delta = abs((t1 - t2).total_seconds())
+
+                    if delta <= 10:
+                        hora_bonus = 50
+                    elif delta <= 60:
+                        hora_bonus = 35
+                    elif delta <= 300:
+                        hora_bonus = 20
+                    elif delta <= 600:
+                        hora_bonus = 10
+                except:
+                    pass
+
+            pontuacao = (sim * 100) - dif_valor + hora_bonus
 
             if pontuacao > melhor_pontuacao:
                 melhor_pontuacao = pontuacao
                 possivel = p
-                valor_pdf = p.get("valor", 0)
-                hora_pdf = normalizar_hora(p.get("hora", ""))
 
-        # Criar motivo
+        # gerar motivo
         if possivel:
+            valor_pdf = round(possivel["valor"], 2)
             val_dif = abs(valor_excel - valor_pdf)
             val_msg = (
                 "igual" if val_dif < 0.01 else
@@ -878,8 +876,8 @@ async def conferir_caixa(
                 "diferente"
             )
             motivo = (
-                f"Nome semelhante encontrado: '{possivel.get('nome')}' "
-                f"(Sim={similaridade(nome_excel, possivel.get('nome')):.2f}), "
+                f"Nome semelhante encontrado: '{possivel['nome']}' "
+                f"(Sim={similaridade(nome_excel, possivel['nome']):.2f}), "
                 f"valor {val_msg} (R${valor_pdf:.2f})."
             )
             item["banco"] = possivel.get("banco", "")
@@ -890,11 +888,9 @@ async def conferir_caixa(
         item["motivo"] = motivo
         faltando_no_pdf.append(item)
 
-
-
-    # ==========================================================
-    # 5️⃣ PDF → Excel (não usados)
-    # ==========================================================
+    # ============================
+    # PDF → Excel (não usados)
+    # ============================
     for i, p in enumerate(dados_pdf):
         if i not in usados_pdf:
             faltando_no_excel.append({
