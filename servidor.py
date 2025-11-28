@@ -309,7 +309,9 @@ async def detalhe_bb(file_bytes: bytes):
             cnpj_num = re.sub(r"\D", "", nome_limpo)
             nome_limpo = f"Cliente CNPJ {cnpj_num}"
 
-       
+        # Corrige nomes truncados comuns (terminam abruptamente com 2 letras)
+        if re.match(r".{3,}\s+[A-ZÀ-Úa-zà-ú]{1,2}$", nome_limpo):
+            nome_limpo = nome_limpo + " (incompleto)"
 
         nome = nome_limpo
 
