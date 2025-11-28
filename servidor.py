@@ -309,6 +309,8 @@ async def detalhe_bb(file_bytes: bytes):
             cnpj_num = re.sub(r"\D", "", nome_limpo)
             nome_limpo = f"Cliente CNPJ {cnpj_num}"
 
+       
+
         nome = nome_limpo
 
         dados.append({
@@ -907,4 +909,3 @@ async def conferir_caixa(
         "faltando_no_pdf": faltando_no_pdf,
         "faltando_no_excel": faltando_no_excel
     }
-
