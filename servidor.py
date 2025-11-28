@@ -875,11 +875,23 @@ async def conferir_caixa(
                 "próximo" if val_dif <= 0.50 else
                 "diferente"
             )
+            hora_pdf = normalizar_hora(possivel.get("hora", ""))
+
+            # montar comparação de horário
+            hora_msg = ""
+            if hora_excel and hora_pdf:
+                if hora_excel == hora_pdf:
+                    hora_msg = f", horário igual ({hora_pdf})"
+                else:
+                    hora_msg = f", horários diferentes (Excel {hora_excel} ≠ PDF {hora_pdf})"
+
             motivo = (
                 f"Nome semelhante encontrado: '{possivel['nome']}' "
                 f"(Sim={similaridade(nome_excel, possivel['nome']):.2f}), "
-                f"valor {val_msg} (R${valor_pdf:.2f})."
+                f"valor {val_msg} (R${valor_pdf:.2f})"
+                f"{hora_msg}."
             )
+
             item["banco"] = possivel.get("banco", "")
         else:
             motivo = "Nenhum parecido encontrado no PDF."
