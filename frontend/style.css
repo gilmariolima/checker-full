@@ -232,3 +232,11 @@ footer {
   background: black;
   color: white;
 }
+
+
+/* 🎨 CORES POR SETOR */
+.agent-card.setor-suporte { border-left: 6px solid #920000; } /* vermelho escuro */
+.agent-card.setor-vale    { border-left: 6px solid #0b2e6b; } /* azul escuro */
+.agent-card.setor-canoa   { border-left: 6px solid #d63384; } /* rosa */
+.agent-card.setor-top     { border-left: 6px solid #198754; } /* verde */
+
