@@ -132,9 +132,19 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
           </svg>
           <div class='circle-inner'>${perc}%</div>
         </div>`;
+      function classeSetor(agente) {
+        const t = (agente || "").toUpperCase();
+
+        if (t.includes("SUPORTE ONLINE")) return "setor-suporte";
+        if (t.includes("VALE VIAGENS")) return "setor-vale";
+        if (t.includes("CANOA")) return "setor-canoa";
+        if (t.includes("TOP VIAGENS") || t.includes("TOP")) return "setor-top";
+
+        return "";
+      }
 
       html += `
-        <div class='agent-card'>
+        <div class='agent-card ${classeSetor(agente)}'>
           <div class='agent-header' onclick='toggleAgent("${id}")'>
             <div>
               <span class='agent-name'>
@@ -894,31 +904,32 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('totalFaltaExcel').textContent = '0';
 });
 document.getElementById('btnExport').addEventListener('click', async () => {
-  const resultado = document.getElementById('resultado');
-  if (!resultado.innerHTML.trim()) return alert('Nada para exportar');
-
   const totalC = document.getElementById('totalConferidos').textContent;
   const totalP = document.getElementById('totalFaltaPdf').textContent;
   const totalE = document.getElementById('totalFaltaExcel').textContent;
+
   const hoje = new Date();
   const dataStr = hoje.toLocaleDateString('pt-BR');
   const nomeBase = `ConferenciaCaixa_${bancoDetectado || 'DESCONHECIDO'}_${hoje.toISOString().split('T')[0]}`;
 
-  // ==========================================================
-  // 📊 GERAR RESUMO POR AGENTE
-  // ==========================================================
+  // ✅ RESUMO POR AGENTE (somente)
   const agentes = Array.from(document.querySelectorAll('.agent-card'));
   const dadosResumo = agentes.map(card => {
     const nome = card.querySelector('.agent-name')?.textContent.trim() || 'Sem Agente';
+
+    // meta pode não existir no "Sem Agente"
     const meta = card.querySelector('.agent-meta')?.textContent || '';
     const matchC = meta.match(/Conferidos:\s*(\d+)/);
     const matchP = meta.match(/Falta PDF:\s*(\d+)/);
     const matchE = meta.match(/Falta Excel:\s*(\d+)/);
+
     const conferidos = parseInt(matchC?.[1] || 0);
     const faltaPdf = parseInt(matchP?.[1] || 0);
     const faltaExcel = parseInt(matchE?.[1] || 0);
+
     const totalSpan = card.querySelector('.total-conferidos');
     const totalValor = totalSpan ? totalSpan.textContent.trim() : 'R$ 0,00';
+
     const perc = card.querySelector('.circle-inner')?.textContent.trim() || '0%';
     return { nome, conferidos, faltaPdf, faltaExcel, totalValor, perc };
   });
@@ -933,94 +944,54 @@ document.getElementById('btnExport').addEventListener('click', async () => {
       <td style="text-align:center;">${a.perc}</td>
     </tr>`).join('');
 
-  const resumoHTML = `
-    <div style="text-align:center; margin-bottom:10px;">
-      <h2 style="color:#0a66c2; margin:0;">📊 Resumo de Conferência de Caixa</h2>
-      <p style="margin:2px 0; font-size:12px;">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></p>
-      <p style="margin:2px 0; font-size:12px;">
-        ✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}
-      </p>
+  // ✅ HTML FINAL: SOMENTE RESUMO MINIMALISTA
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <style>
+      * { font-family: Arial, sans-serif !important; color:#111 !important; }
+      h2 { margin: 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #ccc; padding: 6px; }
+      th { background: #0a66c2; color: #fff !important; }
+      td { background: #fff; }
+      .topo { text-align:center; margin-bottom:10px; }
+      .linha { margin:2px 0; font-size:12px; }
+      hr { margin: 10px 0; }
+    </style>
+
+    <div class="topo">
+      <h2>📊 Resumo de Conferência de Caixa</h2>
+      <div class="linha">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataStr}</strong></div>
+      <div class="linha">✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}</div>
       <hr>
     </div>
-    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+
+    <table>
       <thead>
-        <tr style="background:#0a66c2; color:#fff;">
-          <th>Agente</th><th>Conferidos</th><th>Falta PDF</th><th>Falta Excel</th><th>Total (R$)</th><th>%</th>
+        <tr>
+          <th>Agente</th>
+          <th>Conferidos</th>
+          <th>Falta PDF</th>
+          <th>Falta Excel</th>
+          <th>Total (R$)</th>
+          <th>%</th>
         </tr>
       </thead>
       <tbody>${linhas}</tbody>
     </table>
-    <hr style="margin:15px 0;">`;
 
-  // ==========================================================
-  // 📋 GERAR RELATÓRIO DETALHADO
-  // ==========================================================
-  const clone = resultado.cloneNode(true);
-  clone.querySelectorAll('button').forEach(e => e.remove()); // remove botões
-
-  // 🔧 Garante que todas as seções de agentes fiquem visíveis no PDF
-  clone.querySelectorAll('.agent-content').forEach(el => {
-    el.classList.add('show');
-    el.style.display = 'block';
-    el.style.opacity = '1';
-    el.style.maxHeight = 'none';
-  });
-
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <style>
-      * {
-        font-family: 'Arial', sans-serif !important;
-        color: #111 !important;
-        background: #fff !important;
-        opacity: 1 !important;
-        box-shadow: none !important;
-      }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #ccc; padding: 6px; }
-      th { background: #0a66c2; color: #fff; }
-      td { background: #fff; color: #111; }
-      .agent-card, .entry {
-        background: #fff !important;
-        border: 1px solid #ddd !important;
-      }
-      .agent-header {
-        background: #f3f6f9 !important;
-        border-bottom: 1px solid #ccc !important;
-        font-weight: bold !important;
-      }
-      .text-success { color: #0a6c2d !important; }
-      .text-warning { color: #b45309 !important; }
-      .text-danger { color: #a31515 !important; }
-      .text-primary { color: #0a66c2 !important; }
-      .fw-bold { font-weight: bold !important; }
-      .agent-card { margin-bottom: 8px !important; padding: 6px 10px !important; }
-      .entry { margin-bottom: 3px !important; padding: 4px 6px !important; }
-      .circle-inner { color:#0a66c2 !important; font-weight:bold; }
-    </style>
-
-    ${resumoHTML}
-
-    <div style="text-align:center; margin-bottom:8px;">
-      <h3 style="color:#0a66c2; margin:0;">📄 Detalhamento Completo</h3>
-    </div>
-
-    ${clone.outerHTML}
-
-    <div style="text-align:center; margin-top:10px; font-size:10px; color:#444;">
+    <div style="text-align:center; margin-top:10px; font-size:10px; color:#444 !important;">
       © ${new Date().getFullYear()} Conferência de Caixa — Desenvolvido por <strong>Gilmario Lima</strong>
     </div>
   `;
 
   const optFinal = {
     margin: [0.3, 0.3, 0.4, 0.3],
-    filename: nomeBase + '_Completo.pdf',
-    html2canvas: { scale: 1.1, useCORS: true, backgroundColor: '#ffffff' },
+    filename: nomeBase + '_Resumo.pdf',
+    html2canvas: { scale: 1.2, useCORS: true, backgroundColor: '#ffffff' },
     jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
     pagebreak: { mode: ['css', 'legacy'] }
   };
 
   html2pdf().set(optFinal).from(wrapper).save();
 });
-
-
