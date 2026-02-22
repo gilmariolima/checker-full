@@ -2,10 +2,10 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io, re, pdfplumber
-from datetime import datetime, date   # ✅ <-- ADICIONADO
+from datetime import datetime, date
 from difflib import SequenceMatcher
 import unicodedata
-from typing import List, Dict, Any    # ✅ tipos usados nas funções
+from typing import List, Dict, Any
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -14,14 +14,12 @@ from fastapi.responses import FileResponse
 # ==========================================================
 app = FastAPI()
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ==========================================================
 # 🌐 Servir o Frontend (HTML, CSS, JS e ícone)
@@ -47,7 +45,6 @@ def try_parse_date(s: str) -> date | None:
             return datetime.strptime(s, p).date()
         except Exception:
             pass
-    # tentar extrair trecho dd/mm/yyyy dentro da string (ex: '03/11/2025 07:11')
     m = re.search(r"(\d{2}/\d{2}/\d{4})", s)
     if m:
         try:
@@ -60,7 +57,7 @@ def try_parse_date(s: str) -> date | None:
 def filter_items_by_date(items: List[Dict[str, Any]], selected: date) -> List[Dict[str, Any]]:
     """Filtra lista de dicionários onde exista algum campo de data que bata com selected."""
     if not selected:
-        return items[:]  # sem filtro -> retorna tudo
+        return items[:]
     keys_to_try = ["data", "date", "data_pdf", "data_excel", "dia"]
     filtered = []
     for it in items:
@@ -71,7 +68,6 @@ def filter_items_by_date(items: List[Dict[str, Any]], selected: date) -> List[Di
                 if dt and dt == selected:
                     matched = True
                     break
-        # se nenhuma das chaves padrão existir, tentar achar uma data dentro dos valores de texto
         if not matched:
             for v in it.values():
                 if isinstance(v, str):
@@ -83,10 +79,10 @@ def filter_items_by_date(items: List[Dict[str, Any]], selected: date) -> List[Di
             filtered.append(it)
     return filtered
 
+
 # ==========================================================
 # 🔹 Função auxiliar para parsear valores numéricos
 # ==========================================================
-
 def parse_valor_robusto(v):
     if v is None:
         return 0.0
@@ -120,6 +116,7 @@ def parse_valor_robusto(v):
     fallback = re.sub(r'[^\d\.\-]', '', cleaned)
     return round(float(fallback or 0.0), 2)
 
+
 # ==========================================================
 # 🟡 DETALHE BANCO DO BRASIL (versão final consolidada)
 # ==========================================================
@@ -131,7 +128,6 @@ async def detalhe_bb(file_bytes: bytes):
     ✅ Reconstrói PIX com CNPJ sem nome
     🚫 Ignora ruídos como '5 Pix - Recebido' ou cabeçalhos incompletos.
     """
-
     print("\n========== [DEBUG] INÍCIO DA LEITURA PDF BANCO DO BRASIL ==========\n")
 
     try:
@@ -139,8 +135,6 @@ async def detalhe_bb(file_bytes: bytes):
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
             for i, page in enumerate(pdf.pages):
                 texto_pagina = page.extract_text() or ""
-                #print(f"\n----- Página {i+1} -----\n")
-                #print(texto_pagina[:1500])  # preview
                 texto_total += "\n" + texto_pagina
 
         with open("pdf_debug.txt", "w", encoding="utf-8") as f:
@@ -155,19 +149,14 @@ async def detalhe_bb(file_bytes: bytes):
     texto_total = re.sub(r"\s+", " ", texto_total)
     texto_limpo = texto_total
 
-    # Remove cabeçalhos e rodapés
     texto_limpo = re.sub(r"Extrato de Conta Corrente.*?Valor", " ", texto_limpo, flags=re.IGNORECASE)
     texto_limpo = re.sub(r"----- Página \d+ -----", " ", texto_limpo)
     texto_limpo = re.sub(r"\s+", " ", texto_limpo)
 
-    # 🔹 Mantém apenas lançamentos com "(+)" = Pix recebido
-    texto_limpo = re.sub(r"\(\-\)", "", texto_limpo)  # remove saídas
-    texto_limpo = re.sub(r"(?i)Pix\s*-\s*Enviado", "", texto_limpo)  # remove envios
+    texto_limpo = re.sub(r"\(\-\)", "", texto_limpo)
+    texto_limpo = re.sub(r"(?i)Pix\s*-\s*Enviado", "", texto_limpo)
 
-    # ==========================================================
-        # ==========================================================
-    # 🧠 Correção global: juntar PIX que ficaram cortados entre páginas
-    # ==========================================================
+    # juntar pix cortados
     corrigidos = []
     texto_expandido = texto_limpo
 
@@ -197,11 +186,7 @@ async def detalhe_bb(file_bytes: bytes):
             nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
             bloco_completo = f"Pix - Recebido {data_curta}/2025 {hora} {nome} {valor_txt} (+)"
             corrigidos.append((m.start(), bloco_completo))
-
-            # 🟡 DEBUG EXTRA: loga no terminal quando reconstruir
             print(f"🧩 [RECONSTRUÍDO] {data_curta}/2025 {hora} | {nome} | R${valor_txt}")
-
-
 
     if corrigidos:
         partes = []
@@ -212,12 +197,9 @@ async def detalhe_bb(file_bytes: bytes):
             ultimo_fim = inicio
         texto_limpo = "".join(partes) + texto_expandido[ultimo_fim:]
 
-    # 🔹 Divide o texto em blocos que comecem em "Pix - Recebido"
     blocos = re.split(r"(?=Pix\s*-\s*Recebido)", texto_limpo, flags=re.IGNORECASE)
 
-    # ==========================================================
-    # 🔧 REGRA ESPECIAL: consertar PIX quebrados entre páginas
-    # ==========================================================
+    # conserto local
     corrigido = []
     padrao_pix_valor = re.compile(r"Pix\s*-\s*Recebido\s+([\d\.,]+)\s*\(\+\)", re.IGNORECASE)
     padrao_nome_hora = re.compile(r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+([A-ZÀ-ÿ\s]{3,})\s+\d+", re.IGNORECASE)
@@ -241,20 +223,17 @@ async def detalhe_bb(file_bytes: bytes):
     dados = []
     print(f"🔍 Total de blocos detectados: {len(blocos)}\n")
 
-    # ==========================================================
-    # 🎯 REGEX PRINCIPAL: captura Pix válidos
-    # ==========================================================
     padrao_pix = re.compile(
         r"Pix\s*-\s*Recebido.*?"
-        r"(?:(\d{2}/\d{2}/\d{4})|(\d{2}/\d{2}))?\s*"  # data completa ou parcial
-        r"(\d{2}:\d{2})\s+"                            # hora
-        r"(?:[0-9]{5,}\s+)?"                           # ID transação (opcional)
-        r"([A-ZÀ-ÿ0-9\s\.]{3,}?)\s+"                   # nome (pode conter números)
-        r"([\d\.]+,\d{2})\s*\(\+\)",                   # valor (+)
+        r"(?:(\d{2}/\d{2}/\d{4})|(\d{2}/\d{2}))?\s*"
+        r"(\d{2}:\d{2})\s+"
+        r"(?:[0-9]{5,}\s+)?"
+        r"([A-ZÀ-ÿ0-9\s\.]{3,}?)\s+"
+        r"([\d\.]+,\d{2})\s*\(\+\)",
         re.IGNORECASE,
     )
 
-    data_atual = None  # mantém última data válida, se realmente faltar
+    data_atual = None
 
     for bloco in blocos:
         m = padrao_pix.search(bloco)
@@ -263,18 +242,15 @@ async def detalhe_bb(file_bytes: bytes):
 
         data_full, data_partial, hora, nome_raw, valor_txt = m.groups()
 
-        # 1️⃣ tenta pegar a data do próprio bloco
         if data_full:
             data_atual = data_full
         elif data_partial:
             data_atual = f"{data_partial}/2025"
         else:
-            # 2️⃣ tenta achar uma data próxima (dentro do próprio bloco)
             m2 = re.search(r"(\d{2}/\d{2})(?:/\d{4})?", bloco)
             if m2:
                 data_atual = f"{m2.group(1)}/2025"
 
-        # 3️⃣ se ainda não achou, busca até 100 caracteres antes do bloco
         if not data_atual:
             idx = texto_limpo.find(bloco)
             if idx != -1:
@@ -283,12 +259,10 @@ async def detalhe_bb(file_bytes: bytes):
                 if m3:
                     data_atual = f"{m3.group(1)}/2025"
 
-        # 4️⃣ ainda não tem data? ignora o bloco
         if not data_atual:
             continue
 
         data = data_atual
-
 
         nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
         nome = re.sub(r"(?i)\b(Agência|Conta|Saldo|Pix)\b.*", "", nome).strip()
@@ -301,14 +275,10 @@ async def detalhe_bb(file_bytes: bytes):
         if valor <= 0:
             continue
 
-        # 🔧 Correção automática de nomes "fora do padrão"
         nome_limpo = nome.strip()
-
-        # Detecta CNPJs isolados (como 44.735.327 ou 00061162798300)
         if re.fullmatch(r"[0-9.\s]{7,}", nome_limpo):
             cnpj_num = re.sub(r"\D", "", nome_limpo)
             nome_limpo = f"Cliente CNPJ {cnpj_num}"
-
         nome = nome_limpo
 
         dados.append({
@@ -319,10 +289,6 @@ async def detalhe_bb(file_bytes: bytes):
             "banco": "BB"
         })
 
-
-    # ==========================================================
-    # 🧾 Captura complementar: PIX com CNPJ (sem nome)
-    # ==========================================================
     padrao_cnpj = re.compile(
         r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}|\d{11,14})\s+([\d\.,]+)\s*\(\+\)",
         re.IGNORECASE,
@@ -336,9 +302,6 @@ async def detalhe_bb(file_bytes: bytes):
             continue
         dados.append({"data": f"{data_curta}/2025", "hora": hora, "nome": nome, "valor": valor, "banco": "BB"})
 
-    # ==========================================================
-    # 🧹 Limpeza final: remover duplicatas e ordenar
-    # ==========================================================
     unicos = []
     vistos = set()
     for d in dados:
@@ -348,9 +311,6 @@ async def detalhe_bb(file_bytes: bytes):
             vistos.add(chave)
     dados = sorted(unicos, key=lambda d: d["hora"])
 
-    # ==========================================================
-    # 🪵 LOG FINAL
-    # ==========================================================
     print(f"\n========== [LOG - PIX RECEBIDOS BANCO DO BRASIL - FINAL] ==========")
     print(f"Total detectado: {len(dados)}\n")
     for i, d in enumerate(dados, start=1):
@@ -361,54 +321,31 @@ async def detalhe_bb(file_bytes: bytes):
         return {"erro": "Nenhum lançamento PIX identificado no PDF do Banco do Brasil."}
     return {"banco": "bb", "dados": dados}
 
+
 # ==========================================================
-# 🟢 DETALHE BANCO C6 (versão robusta com desbloqueio automático)
+# 🟢 DETALHE BANCO C6 (SEM DESBLOQUEIO)
 # ==========================================================
 async def detalhe_c6(file_bytes: bytes, senha: str = None):
     """
     Extrai transações PIX de PDFs do C6 Bank.
-    Se o PDF estiver bloqueado, tenta desbloquear automaticamente com pikepdf.
+    ❌ Sem desbloqueio: se o PDF estiver protegido, retorna erro pedindo PDF desbloqueado.
     """
     texto_total = ""
-
-    # 1️⃣ Tenta abrir diretamente
     try:
         with pdfplumber.open(io.BytesIO(file_bytes), password=senha or None) as pdf:
             for page in pdf.pages:
                 texto_total += "\n" + (page.extract_text() or "")
-
     except Exception as e:
         erro_str = str(e).lower()
-        print("⚠️ Falha ao abrir PDF C6:", erro_str)
-
-        # 2️⃣ Se bloqueado, tenta desbloquear com pikepdf
         if any(word in erro_str for word in ["password", "encrypt", "decrypt", "permiss"]):
-            print("🔓 Tentando desbloquear PDF C6 com pikepdf...")
+            return {"erro": "O PDF C6 está protegido. Envie o PDF já desbloqueado."}
+        return {"erro": f"Erro ao abrir PDF C6: {e}"}
 
-            try:
-                pdf_desbloqueado = pikepdf.open(io.BytesIO(file_bytes))
-                buffer = io.BytesIO()
-                pdf_desbloqueado.save(buffer)
-                buffer.seek(0)
-
-                with pdfplumber.open(buffer) as pdf:
-                    for page in pdf.pages:
-                        texto_total += "\n" + (page.extract_text() or "")
-                print("✅ PDF C6 desbloqueado e processado com sucesso.")
-
-            except pikepdf._qpdf.PasswordError:
-                return {"erro": "O PDF C6 está protegido por senha. Informe a senha para continuar."}
-            except Exception as e2:
-                return {"erro": f"Falha ao desbloquear PDF C6: {e2}"}
-        else:
-            return {"erro": f"Erro ao abrir PDF C6: {e}"}
-
-    # 3️⃣ Continua com o parser normal
     return {"dados": extrair_pix_c6(texto_total)}
 
 
 # ==========================================================
-# 🧩 PARSER DE TEXTO - C6 (idêntico ao seu, com refinamento)
+# 🧩 PARSER DE TEXTO - C6
 # ==========================================================
 def extrair_pix_c6(texto_total: str):
     texto_limpo = re.sub(r"\s+", " ", texto_total)
@@ -424,8 +361,6 @@ def extrair_pix_c6(texto_total: str):
     for m in padrao.finditer(texto_limpo):
         data_curta, nome_raw, valor_txt, hora = m.groups()
 
-        # --- CORREÇÃO: montar data corretamente ---
-        # data_curta pode ser "dd/mm" ou "dd/mm/yyyy"
         if data_curta is None:
             data = ""
         elif re.fullmatch(r"\d{2}/\d{2}/\d{4}", data_curta):
@@ -436,8 +371,6 @@ def extrair_pix_c6(texto_total: str):
             data = ""
 
         nome = re.sub(r"\s{2,}", " ", (nome_raw or "").strip()).title()
-
-        # Limpeza extra no nome
         nome = re.sub(r"(?i)\b(Agência|Conta|Saldo|Pix)\b.*", "", nome).strip()
         if not nome:
             continue
@@ -451,10 +384,8 @@ def extrair_pix_c6(texto_total: str):
             continue
 
         hora = hora or ""
-
         dados.append({"data": data, "hora": hora, "nome": nome, "valor": valor})
 
-    # --- fallback / parsing alternativo (mantive seu fallback original) ---
     if not dados:
         linhas = re.split(r"\n+", texto_limpo)
         ano = ano_atual
@@ -475,7 +406,6 @@ def extrair_pix_c6(texto_total: str):
                     continue
                 dados.append({"data": data, "nome": nome, "valor": valor, "hora": ""})
 
-    # --- remover duplicatas (agora incluindo data na chave) ---
     unicos = []
     vistos = set()
     for d in dados:
@@ -485,9 +415,7 @@ def extrair_pix_c6(texto_total: str):
             vistos.add(chave)
     dados = unicos
 
-    # --- ordenar por data (se possível) e hora ---
     def sort_key(d):
-        # try_parse_date está disponível no arquivo; se não for, tenta parse simples
         try:
             dt = try_parse_date(d.get("data", "")) or datetime.min.date()
         except:
@@ -497,7 +425,6 @@ def extrair_pix_c6(texto_total: str):
 
     dados = sorted(dados, key=sort_key)
 
-    # LOG (mantive seu estilo)
     print(f"\n========== [LOG - PIX RECEBIDOS C6 BANK - FINAL] ==========")
     print(f"Total detectado: {len(dados)}\n")
     for i, d in enumerate(dados, start=1):
@@ -511,7 +438,6 @@ def extrair_pix_c6(texto_total: str):
 # 🔍 PROCESSAR PDF → Detecta e chama o parser correto
 # ==========================================================
 async def processar_pdf(file_bytes: bytes, senha: str = None):
-
     texto_total = ""
     try:
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
@@ -525,16 +451,18 @@ async def processar_pdf(file_bytes: bytes, senha: str = None):
 
     if "C6" in upper or "C6BANK" in upper:
         banco = "c6"
-        # ✅ Chamar com await e passando os bytes corretos
         resp = await detalhe_c6(file_bytes, senha)
+        if "erro" in resp:
+            return resp
         dados = resp.get("dados", [])
         for d in dados:
             d["banco"] = "C6"
 
     elif "BANCO DO BRASIL" in upper or "EXTRATO DE CONTA" in upper or "BB S.A" in upper:
         banco = "bb"
-        # 🟢 Chama corretamente a função assíncrona detalhe_bb (que lê os bytes)
         resp = await detalhe_bb(file_bytes)
+        if "erro" in resp:
+            return resp
         dados = resp.get("dados", [])
         for d in dados:
             d["banco"] = "BB"
@@ -556,17 +484,13 @@ async def processar_excel(file_bytes: bytes):
             return ""
         h = str(h).strip().lower().replace(" ", "")
         h = h.replace(".", ":").replace("h", ":")
-        # 7 -> 07:00
         if re.fullmatch(r"^\d{1,2}$", h):
             return f"{int(h):02d}:00"
-        # 758 -> 07:58
         if re.fullmatch(r"^\d{3,4}$", h):
             return f"{int(h[:-2]):02d}:{int(h[-2:]):02d}"
-        # 7:5 -> 07:05
         if re.fullmatch(r"^\d{1,2}:\d{1,2}$", h):
             partes = h.split(":")
             return f"{int(partes[0]):02d}:{int(partes[1]):02d}"
-        # 07:58:00 -> 07:58
         if re.fullmatch(r"^\d{2}:\d{2}:\d{2}$", h):
             return h[:5]
         return ""
@@ -584,9 +508,26 @@ async def processar_excel(file_bytes: bytes):
         for _, linha in df.iterrows():
             texto = " ".join(str(x) for x in linha if pd.notna(x)).strip()
             if "AGENTE" in texto.upper():
+                # Extrai nome do agente
                 m_ag = re.search(r"AGENTE[:/]\s*([A-Za-zÀ-ÿ0-9\s]+)", texto, re.IGNORECASE)
+                nome_agente = ""
                 if m_ag:
-                    agente_atual = re.sub(r"\d+", "", m_ag.group(1)).strip().upper()
+                    nome_agente = re.sub(r"\d+", "", m_ag.group(1)).strip().upper()
+
+                # Tenta pegar setor na última coluna da linha
+                setor = ""
+                try:
+                    ultima_coluna = str(linha.iloc[-1]).strip()
+                    if ultima_coluna and not re.search(r"\d{2}/\d{2}/\d{4}", ultima_coluna):
+                        setor = ultima_coluna.upper()
+                except:
+                    pass
+
+                if nome_agente and setor:
+                    agente_atual = f"{nome_agente} - {setor}"
+                else:
+                    agente_atual = nome_agente
+
                 continue
             if not agente_atual:
                 continue
@@ -613,11 +554,6 @@ async def processar_excel(file_bytes: bytes):
     if not todas_linhas:
         return {"erro": "Nenhum dado válido encontrado na planilha."}
     return {"tabela": todas_linhas}
-
-
-
-from typing import List
-from datetime import datetime, timedelta
 
 
 @app.post("/conferir_caixa")
@@ -708,7 +644,11 @@ async def conferir_caixa(
 
         return ""
 
-    usados_pdf = set()
+    # ==========================================================
+    # ✅ REGRA: 1 PIX DO PDF SÓ PODE SER USADO 1 VEZ
+    # ==========================================================
+    usados_pdf = set()     # índices do pdf já consumidos
+    usado_por = {}         # idx -> info de quem consumiu
     conferidos = []
     faltando_no_pdf = []
     faltando_no_excel = []
@@ -724,15 +664,15 @@ async def conferir_caixa(
 
         escolhido = None
         candidatos = []
+        melhor_ja_usado = None
 
-        # ============================
-        # CANDIDATOS COM VALOR IGUAL
-        # ============================
+        # ----------------------------
+        # candidatos com valor igual
+        # ----------------------------
         for idx, p in enumerate(dados_pdf):
             nome_pdf = p["nome"]
             valor_pdf = round(p.get("valor") or 0.0, 2)
             hora_pdf = normalizar_hora(p.get("hora", ""))
-            usado = idx in usados_pdf
 
             if abs(valor_excel - valor_pdf) < 0.01:
                 sim = similaridade(nome_excel, nome_pdf)
@@ -740,7 +680,6 @@ async def conferir_caixa(
                 ne = normalizar(nome_excel)
                 np = normalizar(nome_pdf)
 
-                # boosts de similaridade
                 if ne in np:
                     sim = max(sim, 0.90)
                 elif np in ne:
@@ -761,36 +700,59 @@ async def conferir_caixa(
                     except:
                         pass
 
+                # ✅ se já foi usado, NÃO deixa virar candidato
+                if idx in usados_pdf:
+                    score_dup = (sim * 100) + (20 if hora_ok else 0) - (hora_delta / 1000)
+                    if (melhor_ja_usado is None) or (score_dup > melhor_ja_usado["score"]):
+                        melhor_ja_usado = {
+                            "idx": idx,
+                            "score": score_dup,
+                            "sim": sim,
+                            "hora_ok": hora_ok,
+                            "hora_delta": hora_delta,
+                            "valor_pdf": valor_pdf,
+                            "nome_pdf": nome_pdf,
+                            "hora_pdf": hora_pdf,
+                            "data_pdf": p.get("data"),
+                            "usado_por": usado_por.get(idx),
+                        }
+                    continue
+
                 candidatos.append({
                     "idx": idx,
                     "sim": sim,
                     "hora_ok": hora_ok,
                     "hora_delta": hora_delta,
-                    "usado": usado,
                     "valor_pdf": valor_pdf,
                     "nome_pdf": nome_pdf,
                     "hora_pdf": hora_pdf,
                     "data_pdf": p.get("data"),
                 })
 
-        # escolher melhor candidato por valor igual
         if candidatos:
             candidatos.sort(key=lambda x: (
-                x["usado"],
                 not x["hora_ok"],
                 -x["sim"],
                 x["hora_delta"]
             ))
             escolhido = candidatos[0]
 
-        # ============================
-        # CONFIRMAR SE POSSÍVEL
-        # ============================
+        # ----------------------------
+        # confirma
+        # ----------------------------
         if escolhido and (
             escolhido["sim"] >= 0.70 or
             (escolhido["sim"] >= 0.55 and abs(valor_excel - escolhido["valor_pdf"]) < 0.01)
         ):
-            usados_pdf.add(escolhido["idx"])
+            idx_escolhido = escolhido["idx"]
+            usados_pdf.add(idx_escolhido)
+            usado_por[idx_escolhido] = {
+                "agente": agente_excel,
+                "nome_excel": nome_excel,
+                "valor": valor_excel,
+                "hora": hora_excel,
+            }
+
             conferidos.append({
                 "agente": agente_excel,
                 "nome_excel": nome_excel,
@@ -802,26 +764,26 @@ async def conferir_caixa(
                 "data_pdf": escolhido["data_pdf"],
                 "similaridade": round(escolhido["sim"], 2),
                 "analise": "ok",
-                "banco": dados_pdf[escolhido["idx"]].get("banco"),
+                "banco": dados_pdf[idx_escolhido].get("banco"),
             })
             continue
 
-        # ============================
-        # SUGESTÃO — VALOR PRÓXIMO
-        # ============================
-        melhor_pontuacao = -999
+        # ----------------------------
+        # sugestão valor próximo (✅ não reutiliza usados)
+        # ----------------------------
+        melhor_pontuacao = -999999
         possivel = None
-        valor_pdf = 0
-        hora_pdf = ""
 
         candidatos_valor = []
-        for p in dados_pdf:
+        for idx, p in enumerate(dados_pdf):
+            if idx in usados_pdf:
+                continue
             if abs(valor_excel - round(p.get("valor", 0), 2)) <= 0.50:
-                candidatos_valor.append(p)
+                candidatos_valor.append((idx, p))
 
-        lista_busca = candidatos_valor if candidatos_valor else dados_pdf
+        lista_busca = candidatos_valor if candidatos_valor else [(idx, p) for idx, p in enumerate(dados_pdf) if idx not in usados_pdf]
 
-        for p in lista_busca:
+        for idx, p in lista_busca:
             nome_pdf = p["nome"]
             valor_pdf = round(p.get("valor") or 0.0, 2)
             hora_pdf = normalizar_hora(p.get("hora", ""))
@@ -841,7 +803,6 @@ async def conferir_caixa(
 
             dif_valor = abs(valor_excel - valor_pdf)
 
-            # ======= BONUS DE HORÁRIO (CORREÇÃO) =======
             hora_bonus = 0
             if hora_excel and hora_pdf:
                 try:
@@ -864,20 +825,19 @@ async def conferir_caixa(
 
             if pontuacao > melhor_pontuacao:
                 melhor_pontuacao = pontuacao
-                possivel = p
+                possivel = (idx, p)
 
-        # gerar motivo
         if possivel:
-            valor_pdf = round(possivel["valor"], 2)
+            idx_p, p = possivel
+            valor_pdf = round(p.get("valor") or 0.0, 2)
             val_dif = abs(valor_excel - valor_pdf)
             val_msg = (
                 "igual" if val_dif < 0.01 else
                 "próximo" if val_dif <= 0.50 else
                 "diferente"
             )
-            hora_pdf = normalizar_hora(possivel.get("hora", ""))
+            hora_pdf = normalizar_hora(p.get("hora", ""))
 
-            # montar comparação de horário
             hora_msg = ""
             if hora_excel and hora_pdf:
                 if hora_excel == hora_pdf:
@@ -886,18 +846,31 @@ async def conferir_caixa(
                     hora_msg = f", horários diferentes (Excel {hora_excel} ≠ PDF {hora_pdf})"
 
             motivo = (
-                f"Nome semelhante encontrado: '{possivel['nome']}' "
-                f"(Sim={similaridade(nome_excel, possivel['nome']):.2f}), "
+                f"Nome semelhante encontrado: '{p.get('nome','')}' "
+                f"(Sim={similaridade(nome_excel, p.get('nome','')):.2f}), "
                 f"valor {val_msg} (R${valor_pdf:.2f})"
                 f"{hora_msg}."
             )
 
-            item["banco"] = possivel.get("banco", "")
+            item["banco"] = p.get("banco", "")
+            item["motivo"] = motivo
+            faltando_no_pdf.append(item)
+            continue
+
+        # se não achou disponível, mas tinha um match que já estava usado
+        if melhor_ja_usado and melhor_ja_usado.get("usado_por"):
+            up = melhor_ja_usado["usado_por"]
+            motivo = (
+                f"PIX já foi conferido por outro agente: {up.get('agente','(desconhecido)')} "
+                f"— {melhor_ja_usado.get('nome_pdf','')} "
+                f"R${melhor_ja_usado.get('valor_pdf',0):.2f} • {melhor_ja_usado.get('hora_pdf','')}"
+            )
+            item["motivo"] = motivo
+            item["banco"] = dados_pdf[melhor_ja_usado["idx"]].get("banco", "")
         else:
-            motivo = "Nenhum parecido encontrado no PDF."
+            item["motivo"] = "Nenhum parecido encontrado no PDF (ou já consumido por outro agente)."
             item["banco"] = ""
 
-        item["motivo"] = motivo
         faltando_no_pdf.append(item)
 
     # ============================
