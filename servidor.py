@@ -54,32 +54,6 @@ def try_parse_date(s: str) -> date | None:
     return None
 
 
-def filter_items_by_date(items: List[Dict[str, Any]], selected: date) -> List[Dict[str, Any]]:
-    """Filtra lista de dicionários onde exista algum campo de data que bata com selected."""
-    if not selected:
-        return items[:]
-    keys_to_try = ["data", "date", "data_pdf", "data_excel", "dia"]
-    filtered = []
-    for it in items:
-        matched = False
-        for k in keys_to_try:
-            if k in it and it[k]:
-                dt = try_parse_date(str(it[k]))
-                if dt and dt == selected:
-                    matched = True
-                    break
-        if not matched:
-            for v in it.values():
-                if isinstance(v, str):
-                    dt = try_parse_date(v)
-                    if dt and dt == selected:
-                        matched = True
-                        break
-        if matched:
-            filtered.append(it)
-    return filtered
-
-
 # ==========================================================
 # 🔹 Função auxiliar para parsear valores numéricos
 # ==========================================================
@@ -156,7 +130,6 @@ async def detalhe_bb(file_bytes: bytes):
     texto_limpo = re.sub(r"\(\-\)", "", texto_limpo)
     texto_limpo = re.sub(r"(?i)Pix\s*-\s*Enviado", "", texto_limpo)
 
-    # juntar pix cortados
     corrigidos = []
     texto_expandido = texto_limpo
 
@@ -199,7 +172,6 @@ async def detalhe_bb(file_bytes: bytes):
 
     blocos = re.split(r"(?=Pix\s*-\s*Recebido)", texto_limpo, flags=re.IGNORECASE)
 
-    # conserto local
     corrigido = []
     padrao_pix_valor = re.compile(r"Pix\s*-\s*Recebido\s+([\d\.,]+)\s*\(\+\)", re.IGNORECASE)
     padrao_nome_hora = re.compile(r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+([A-ZÀ-ÿ\s]{3,})\s+\d+", re.IGNORECASE)
@@ -508,13 +480,11 @@ async def processar_excel(file_bytes: bytes):
         for _, linha in df.iterrows():
             texto = " ".join(str(x) for x in linha if pd.notna(x)).strip()
             if "AGENTE" in texto.upper():
-                # Extrai nome do agente
                 m_ag = re.search(r"AGENTE[:/]\s*([A-Za-zÀ-ÿ0-9\s]+)", texto, re.IGNORECASE)
                 nome_agente = ""
                 if m_ag:
                     nome_agente = re.sub(r"\d+", "", m_ag.group(1)).strip().upper()
 
-                # Tenta pegar setor na última coluna da linha
                 setor = ""
                 try:
                     ultima_coluna = str(linha.iloc[-1]).strip()
@@ -560,7 +530,7 @@ async def processar_excel(file_bytes: bytes):
 async def conferir_caixa(
     pdfs: List[UploadFile] = File(...),
     excels: List[UploadFile] = File(...),
-    data: str = Form(None),
+    data: str = Form(None),   # recebido apenas por compatibilidade, sem filtrar
     senha: str = Form(None)
 ):
     todos_pdf = []
@@ -601,19 +571,6 @@ async def conferir_caixa(
         return {"erro": "Nenhum dado válido encontrado nas planilhas enviadas."}
 
     # ============================
-    # FILTRAR POR DATA
-    # ============================
-    selected_date = None
-    if data:
-        try:
-            selected_date = datetime.strptime(data.strip(), "%Y-%m-%d").date()
-        except:
-            selected_date = try_parse_date(data.strip())
-
-    if selected_date:
-        dados_pdf = filter_items_by_date(dados_pdf, selected_date)
-
-    # ============================
     # FUNÇÕES AUXILIARES
     # ============================
     def normalizar(s: str):
@@ -644,11 +601,8 @@ async def conferir_caixa(
 
         return ""
 
-    # ==========================================================
-    # ✅ REGRA: 1 PIX DO PDF SÓ PODE SER USADO 1 VEZ
-    # ==========================================================
-    usados_pdf = set()     # índices do pdf já consumidos
-    usado_por = {}         # idx -> info de quem consumiu
+    usados_pdf = set()
+    usado_por = {}
     conferidos = []
     faltando_no_pdf = []
     faltando_no_excel = []
@@ -666,9 +620,6 @@ async def conferir_caixa(
         candidatos = []
         melhor_ja_usado = None
 
-        # ----------------------------
-        # candidatos com valor igual
-        # ----------------------------
         for idx, p in enumerate(dados_pdf):
             nome_pdf = p["nome"]
             valor_pdf = round(p.get("valor") or 0.0, 2)
@@ -700,7 +651,6 @@ async def conferir_caixa(
                     except:
                         pass
 
-                # ✅ se já foi usado, NÃO deixa virar candidato
                 if idx in usados_pdf:
                     score_dup = (sim * 100) + (20 if hora_ok else 0) - (hora_delta / 1000)
                     if (melhor_ja_usado is None) or (score_dup > melhor_ja_usado["score"]):
@@ -737,9 +687,6 @@ async def conferir_caixa(
             ))
             escolhido = candidatos[0]
 
-        # ----------------------------
-        # confirma
-        # ----------------------------
         if escolhido and (
             escolhido["sim"] >= 0.70 or
             (escolhido["sim"] >= 0.55 and abs(valor_excel - escolhido["valor_pdf"]) < 0.01)
@@ -768,9 +715,6 @@ async def conferir_caixa(
             })
             continue
 
-        # ----------------------------
-        # sugestão valor próximo (✅ não reutiliza usados)
-        # ----------------------------
         melhor_pontuacao = -999999
         possivel = None
 
@@ -857,7 +801,6 @@ async def conferir_caixa(
             faltando_no_pdf.append(item)
             continue
 
-        # se não achou disponível, mas tinha um match que já estava usado
         if melhor_ja_usado and melhor_ja_usado.get("usado_por"):
             up = melhor_ja_usado["usado_por"]
             motivo = (
