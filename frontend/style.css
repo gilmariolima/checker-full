@@ -22,6 +22,7 @@ body {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   border-bottom: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 0 0 20px 20px;
+  position: relative;
 }
 
 .main-header h1 {
@@ -119,11 +120,10 @@ body {
 }
 
 .agent-suffix {
-  color: #004080;        /* Azul mais escuro */
+  color: #004080;
   font-weight: 600;
   text-transform: capitalize;
 }
-
 
 @keyframes fadeIn {
   from {
@@ -144,17 +144,9 @@ body {
   border-left: 4px solid transparent;
 }
 
-.ok {
-  border-left-color: var(--ok);
-}
-
-.warn {
-  border-left-color: var(--warn);
-}
-
-.err {
-  border-left-color: var(--err);
-}
+.ok { border-left-color: var(--ok); }
+.warn { border-left-color: var(--warn); }
+.err { border-left-color: var(--err); }
 
 .circle-wrap {
   position: relative;
@@ -167,22 +159,22 @@ body {
   justify-content: center;
 }
 
-
 .marcar-conferido, .desmarcar-conferido {
   border-radius: 50%;
   padding: 5px 7px;
   line-height: 1;
   transition: 0.2s;
 }
+
 .marcar-conferido:hover {
   background-color: #16a34a;
   color: white;
 }
+
 .desmarcar-conferido:hover {
   background-color: #dc2626;
   color: white;
 }
-
 
 .circle-inner {
   position: absolute;
@@ -213,7 +205,6 @@ footer {
   margin-left: 5px;
 }
 
-
 .bank-badge {
   display: inline-block;
   padding: 2px 6px;
@@ -224,7 +215,7 @@ footer {
 }
 
 .badge-bb {
-  background: #facc15; /* amarelo */
+  background: #facc15;
   color: black;
 }
 
@@ -233,10 +224,61 @@ footer {
   color: white;
 }
 
-
 /* 🎨 CORES POR SETOR */
-.agent-card.setor-suporte { border-left: 6px solid #920000; } /* vermelho escuro */
-.agent-card.setor-vale    { border-left: 6px solid #0b2e6b; } /* azul escuro */
-.agent-card.setor-canoa   { border-left: 6px solid #d63384; } /* rosa */
-.agent-card.setor-top     { border-left: 6px solid #198754; } /* verde */
+.agent-card.setor-suporte { border-left: 6px solid #920000; }
+.agent-card.setor-vale    { border-left: 6px solid #0b2e6b; }
+.agent-card.setor-canoa   { border-left: 6px solid #d63384; }
+.agent-card.setor-top     { border-left: 6px solid #198754; }
 
+/* ============================= */
+/* ✅ BASE MANUAL (NOVO)          */
+/* ============================= */
+.manual-base {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.manual-base-title {
+  font-weight: 800;
+  font-size: 12px;
+  color: #334155;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-base-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manual-base-row input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.manual-base-hint {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+
+.excluir-faltando-excel {
+  border-radius: 50%;
+  padding: 5px 7px;
+  line-height: 1;
+  margin-left: 10px;
+  flex-shrink: 0;
+  transition: 0.2s;
+}
+
+.excluir-faltando-excel:hover {
+  background-color: #dc2626;
+  color: white;
+}
