@@ -6,6 +6,6 @@ python-multipart==0.0.9
 openpyxl==3.1.5
 PyPDF2==3.0.1
 numpy==1.26.4
-scipy==1.18.1
+scipy==1.18.0
 pydantic==2.9.2
 starlette==0.38.2
