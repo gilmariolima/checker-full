@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Conferência de Caixa</title>
+  <title>Conferência de Caixa | Painel</title>
 
   <!-- Ícone do site -->
   <link rel="icon" type="image/png" sizes="32x32" href="/static/icone.png">
   <link rel="apple-touch-icon" href="/static/favicon.png">
-  <meta name="theme-color" content="#0a66c2">
+  <meta name="theme-color" content="#201d17">
 
   <!-- Autor -->
   <meta name="author" content="Gilmario Lima">
@@ -17,69 +17,84 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
+  <!-- Fonte -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <!-- CSS externo -->
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="main-header">
-    <h1><i class="bi bi-graph-up-arrow"></i> Conferência de Caixa</h1>
-    <div style="position:absolute; right:20px; top:20px; display:flex; gap:10px;">
-      <a href="https://www.ilovepdf.com/pt/desbloquear_pdf"
-        target="_blank"
-        class="btn btn-light btn-sm"
-        style="font-weight:600; border-radius:6px;">
-        🔓 Desbloquear PDF
-      </a>
-
-      <a href="https://documento.online-convert.com/pt/converter/ods-para-excel"
-        target="_blank"
-        class="btn btn-light btn-sm"
-        style="font-weight:600; border-radius:6px;">
-        📄 ODS → Excel
-      </a>
+    <div class="header-inner">
+      <div class="brand-mark"><i class="bi bi-receipt-cutoff"></i></div>
+      <div>
+        <h1>Conferência de Caixa</h1>
+        <p class="header-subtitle">Cruze seus extratos e planilhas em poucos passos.</p>
+      </div>
     </div>
-
   </header>
+  <div class="tear-edge" aria-hidden="true"></div>
 
-  <main class="container-lg mt-4">
-    <div class="panel">
-      <div class="mb-3">
-        <label class="form-label">Arquivo PDF (C6 ou BB)</label>
-        <input type="file" id="pdfFile" accept=".pdf" multiple class="form-control">
+  <main class="workspace-shell">
+    <section class="intro-row">
+      <div>
+        <h2>Compare. Encontre. Resolva.</h2>
+        <p class="intro-copy">Envie os documentos do período para identificar rapidamente divergências entre o banco e o Excel.</p>
+      </div>
+      <div class="status-note"><i class="bi bi-shield-check"></i><span>Seus arquivos são usados apenas nesta conferência.</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <h3>Documentos da conferência</h3>
+        </div>
+        <span class="required-note"><i class="bi bi-asterisk"></i> PDF e Excel são obrigatórios</span>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label">Planilhas Excel (.xlsx)</label>
-        <input type="file" id="excelFile" accept=".xlsx" multiple class="form-control">
+      <div class="upload-grid">
+        <div class="upload-field">
+          <label class="form-label" for="pdfFile"><span class="field-icon pdf-icon"><i class="bi bi-filetype-pdf"></i></span>Extratos bancários <small>PDF</small></label>
+          <input type="file" id="pdfFile" accept=".pdf" multiple class="form-control">
+          <p class="field-hint">Aceita extratos do Banco do Brasil e C6 Bank.</p>
+        </div>
+        <div class="upload-field">
+          <label class="form-label" for="excelFile"><span class="field-icon excel-icon"><i class="bi bi-filetype-xlsx"></i></span>Planilhas de controle <small>XLSX</small></label>
+          <input type="file" id="excelFile" accept=".xlsx" multiple class="form-control">
+          <p class="field-hint">Você pode selecionar mais de uma planilha.</p>
+        </div>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label">Data da conferência (opcional)</label>
-        <input type="date" id="dataFiltro" class="form-control">
+      <div class="action-bar">
+        <div class="action-copy"><i class="bi bi-lightning-charge-fill"></i><span>Pronto para analisar os arquivos?</span></div>
+        <div class="action-buttons">
+          <button class="btn btn-primary" id="btnConferir"><i class="bi bi-search"></i> Iniciar conferência</button>
+          <button class="btn btn-quiet" id="btnLimpar"><i class="bi bi-arrow-counterclockwise"></i> Limpar</button>
+          <button class="btn btn-export" id="btnExport"><i class="bi bi-filetype-pdf"></i> Exportar PDF</button>
+        </div>
       </div>
+    </section>
 
-      <div class="d-flex flex-wrap gap-2 mb-3">
-        <button class="btn btn-primary" id="btnConferir"><i class="bi bi-search"></i> Conferir</button>
-        <button class="btn btn-outline-secondary" id="btnLimpar"><i class="bi bi-brush"></i> Limpar</button>
-        <button class="btn btn-outline-danger" id="btnExport"><i class="bi bi-filetype-pdf"></i> Exportar PDF</button>
+    <section class="results-section">
+      <div class="results-heading">
+        <div><h2>Resultado da análise</h2></div>
+        <span class="results-total">Total processado: <strong class="total-conferidos-topo">R$ 0,00</strong></span>
       </div>
-
       <div class="summary">
-        <div class="chip ok-chip">✅ Conferidos: <strong id="totalConferidos">0</strong></div>
-        <div class="chip warn-chip">⚠️ Falta PDF: <strong id="totalFaltaPdf">0</strong></div>
-        <div class="chip err-chip">❌ Falta Excel: <strong id="totalFaltaExcel">0</strong></div>
+        <div class="chip ok-chip"><span class="chip-icon"><i class="bi bi-check2"></i></span><span><small>Conferidos</small><strong id="totalConferidos">0</strong></span></div>
+        <div class="chip warn-chip"><span class="chip-icon"><i class="bi bi-exclamation-lg"></i></span><span><small>Falta no PDF</small><strong id="totalFaltaPdf">0</strong></span></div>
+        <div class="chip err-chip"><span class="chip-icon"><i class="bi bi-x-lg"></i></span><span><small>Falta no Excel</small><strong id="totalFaltaExcel">0</strong></span></div>
       </div>
-
-      <div id="progressArea" class="text-center mt-4" style="display:none;">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="text-muted mt-2">Processando arquivos...</p>
+      <div id="progressArea" class="progress-area" style="display:none;">
+        <div class="spinner-border" role="status"></div><div><strong>Processando arquivos</strong><p>Aguarde enquanto cruzamos os lançamentos.</p></div>
       </div>
-
-      <div id="resultado" class="mt-4"></div>
-    </div>
+      <div id="resultado" class="results-list"></div>
+    </section>
   </main>
 
-  <footer>© 2025 - 2026 Conferência de Caixa - Gilmario Lima</footer>
+  <footer><span>Conferência de Caixa</span> · Gilmario Lima · 2025–2026</footer>
 
   <!-- Dependências -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>

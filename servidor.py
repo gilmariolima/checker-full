@@ -5,6 +5,8 @@ import io, re, pdfplumber
 from datetime import datetime, date
 from difflib import SequenceMatcher
 import unicodedata
+import numpy as np
+from scipy.optimize import linear_sum_assignment
 from typing import List, Dict, Any
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -96,20 +98,34 @@ def parse_valor_robusto(v):
 # ==========================================================
 async def detalhe_bb(file_bytes: bytes):
     """
-    Parser robusto e filtrado para extratos do Banco do Brasil.
-    ✅ Captura todos os PIX RECEBIDOS (com '(+)')
-    ✅ Corrige PIX quebrados entre páginas
-    ✅ Reconstrói PIX com CNPJ sem nome
-    🚫 Ignora ruídos como '5 Pix - Recebido' ou cabeçalhos incompletos.
+    Parser linha-a-linha para extratos do Banco do Brasil.
+
+    O extrato lista cada PIX recebido em 2 ou 3 linhas, mas a ORDEM dessas
+    linhas varia conforme a exportação do PDF (já vimos os dois casos):
+
+    Formato A (valor antes do rótulo):
+        13/07/2026 14397 130921147643521 1.055,74 (+)
+        Pix - Recebido
+        13/07 09:21 08123628374 Gilmario de Li
+
+    Formato B (tudo depois do rótulo, numa linha só):
+        Pix - Recebido
+        13/07/2026 14397 130921147643521 13/07 09:21 08123628374 Gilmario de Li 1.055,74 (+)
+
+    Por isso ancoramos a busca em cada ocorrência de "Pix - Recebido" e
+    olhamos para as linhas vizinhas (antes e depois) em vez de assumir uma
+    ordem fixa via regex de texto corrido — o formato antigo, ao colapsar
+    tudo numa única linha, perdia registros sempre que a ordem real do PDF
+    não era exatamente a esperada.
     """
     print("\n========== [DEBUG] INÍCIO DA LEITURA PDF BANCO DO BRASIL ==========\n")
 
     try:
-        texto_total = ""
+        paginas_texto = []
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            for i, page in enumerate(pdf.pages):
-                texto_pagina = page.extract_text() or ""
-                texto_total += "\n" + texto_pagina
+            for page in pdf.pages:
+                paginas_texto.append(page.extract_text() or "")
+        texto_total = "\n".join(paginas_texto)
 
         with open("pdf_debug.txt", "w", encoding="utf-8") as f:
             f.write(texto_total)
@@ -118,131 +134,74 @@ async def detalhe_bb(file_bytes: bytes):
         print(f"\n⚠️ Erro ao ler PDF: {e}")
         return {"erro": f"Falha ao processar PDF ({e})"}
 
-    print("\n========== [DEBUG] LIMPEZA E NORMALIZAÇÃO ==========\n")
+    print("\n========== [DEBUG] PARSE LINHA A LINHA ==========\n")
 
-    texto_total = re.sub(r"\s+", " ", texto_total)
-    texto_limpo = texto_total
+    linhas = [l.strip() for l in texto_total.split("\n") if l.strip()]
+    n = len(linhas)
 
-    texto_limpo = re.sub(r"Extrato de Conta Corrente.*?Valor", " ", texto_limpo, flags=re.IGNORECASE)
-    texto_limpo = re.sub(r"----- Página \d+ -----", " ", texto_limpo)
-    texto_limpo = re.sub(r"\s+", " ", texto_limpo)
+    texto_join = " ".join(linhas)
+    ano_padrao = datetime.now().year
+    ano_match = re.search(r"Per[íi]odo:\s*\d{2}\s+a\s+\d{2}/\d{2}/(\d{4})", texto_join, re.IGNORECASE)
+    if ano_match:
+        ano_padrao = int(ano_match.group(1))
 
-    texto_limpo = re.sub(r"\(\-\)", "", texto_limpo)
-    texto_limpo = re.sub(r"(?i)Pix\s*-\s*Enviado", "", texto_limpo)
-
-    corrigidos = []
-    texto_expandido = texto_limpo
-
-    pix_soltos = list(re.finditer(
-        r"Pix\s*-\s*Recebido\s+([\d\.,]+)\s*\(\+\)(?!\s*[A-ZÀ-ÿ])",
-        texto_expandido,
-        flags=re.IGNORECASE
-    ))
-    for m in pix_soltos:
-        valor_txt = m.group(1)
-        pos_fim = m.end()
-        trecho_proximo = texto_expandido[pos_fim:pos_fim + 800]
-        trecho_proximo = re.sub(
-            r"Extrato de Conta Corrente|Cliente\s+[A-ZÀ-ÿ\s]+|Ag[êe]ncia:\s*\d+-\d+\s*Conta:\s*\d+-\d+|Lançamentos|Dia\s+Lote\s+Documento\s+Histórico\s+Valor",
-            " ",
-            trecho_proximo,
-            flags=re.IGNORECASE
-        )
-
-        prox = re.search(
-            r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+([A-Za-zÀ-ÿ\s]{3,}?)\s+\d{1,3}",
-            trecho_proximo
-        )
-
-        if prox:
-            data_curta, hora, nome_raw = prox.groups()
-            nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
-            bloco_completo = f"Pix - Recebido {data_curta}/2025 {hora} {nome} {valor_txt} (+)"
-            corrigidos.append((m.start(), bloco_completo))
-            print(f"🧩 [RECONSTRUÍDO] {data_curta}/2025 {hora} | {nome} | R${valor_txt}")
-
-    if corrigidos:
-        partes = []
-        ultimo_fim = 0
-        for inicio, bloco_corrigido in corrigidos:
-            partes.append(texto_expandido[ultimo_fim:inicio])
-            partes.append(bloco_corrigido)
-            ultimo_fim = inicio
-        texto_limpo = "".join(partes) + texto_expandido[ultimo_fim:]
-
-    blocos = re.split(r"(?=Pix\s*-\s*Recebido)", texto_limpo, flags=re.IGNORECASE)
-
-    corrigido = []
-    padrao_pix_valor = re.compile(r"Pix\s*-\s*Recebido\s+([\d\.,]+)\s*\(\+\)", re.IGNORECASE)
-    padrao_nome_hora = re.compile(r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+([A-ZÀ-ÿ\s]{3,})\s+\d+", re.IGNORECASE)
-    for i, bloco in enumerate(blocos[:-1]):
-        m_val = padrao_pix_valor.search(bloco)
-        if not m_val:
-            corrigido.append(bloco)
-            continue
-        valor_txt = m_val.group(1)
-        trecho_entre = blocos[i + 1][:150]
-        m_nome = padrao_nome_hora.search(trecho_entre)
-        if m_nome:
-            data_curta, hora, nome_raw = m_nome.groups()
-            nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
-            bloco_corrigido = f"Pix - Recebido {data_curta}/2025 {hora} {nome} {valor_txt} (+)"
-            corrigido.append(bloco_corrigido)
-        else:
-            corrigido.append(bloco)
-    blocos = corrigido
-
-    dados = []
-    print(f"🔍 Total de blocos detectados: {len(blocos)}\n")
-
-    padrao_pix = re.compile(
-        r"Pix\s*-\s*Recebido.*?"
-        r"(?:(\d{2}/\d{2}/\d{4})|(\d{2}/\d{2}))?\s*"
-        r"(\d{2}:\d{2})\s+"
-        r"(?:[0-9]{5,}\s+)?"
-        r"([A-ZÀ-ÿ0-9\s\.]{3,}?)\s+"
-        r"([\d\.]+,\d{2})\s*\(\+\)",
-        re.IGNORECASE,
+    re_label_recebido = re.compile(r"^Pix\s*-\s*Recebido\b", re.IGNORECASE)
+    re_valor_row = re.compile(r"^(\d{2}/\d{2}/\d{4})\b.*?([\d\.]+,\d{2})\s*\(\+\)\s*$")
+    re_detail_row = re.compile(r"^(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{5,}\s+(.+?)\s*$")
+    re_combined_row = re.compile(
+        r"^(?:(\d{2}/\d{2}/\d{4})\s+)?(?:\d+\s+\d+\s+)?"
+        r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{5,}\s+"
+        r"(.+?)\s+([\d\.]+,\d{2})\s*\(\+\)\s*$"
     )
 
-    data_atual = None
+    dados = []
 
-    for bloco in blocos:
-        m = padrao_pix.search(bloco)
-        if not m:
+    for i, linha in enumerate(linhas):
+        if not re_label_recebido.match(linha):
             continue
 
-        data_full, data_partial, hora, nome_raw, valor_txt = m.groups()
+        data_linha = hora = nome_raw = valor_txt = None
 
-        if data_full:
-            data_atual = data_full
-        elif data_partial:
-            data_atual = f"{data_partial}/2025"
-        else:
-            m2 = re.search(r"(\d{2}/\d{2})(?:/\d{4})?", bloco)
-            if m2:
-                data_atual = f"{m2.group(1)}/2025"
+        # Formato A: valor numa das 2 linhas anteriores, detalhe numa das 2 seguintes
+        for back in (1, 2):
+            if i - back < 0:
+                continue
+            m_val = re_valor_row.match(linhas[i - back])
+            if m_val:
+                data_linha, valor_txt = m_val.groups()
+                break
 
-        if not data_atual:
-            idx = texto_limpo.find(bloco)
-            if idx != -1:
-                antes = texto_limpo[max(0, idx - 100):idx]
-                m3 = re.search(r"(\d{2}/\d{2})(?:/\d{4})?", antes)
-                if m3:
-                    data_atual = f"{m3.group(1)}/2025"
+        for fwd in (1, 2):
+            if i + fwd >= n:
+                continue
+            m_det = re_detail_row.match(linhas[i + fwd])
+            if m_det:
+                _, hora, nome_raw = m_det.groups()
+                break
 
-        if not data_atual:
+        # Formato B (fallback): tudo combinado numa das linhas seguintes
+        if not (hora and valor_txt):
+            for fwd in (1, 2):
+                if i + fwd >= n:
+                    continue
+                m_comb = re_combined_row.match(linhas[i + fwd])
+                if m_comb:
+                    data_full, data_curta, hora, nome_raw, valor_txt = m_comb.groups()
+                    data_linha = data_full or f"{data_curta}/{ano_padrao}"
+                    break
+
+        if not (hora and valor_txt and nome_raw):
+            print(f"⚠️ [linha {i}] PIX - Recebido sem par válido de valor/detalhe nas vizinhanças, ignorado.")
             continue
-
-        data = data_atual
 
         nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
         nome = re.sub(r"(?i)\b(Agência|Conta|Saldo|Pix)\b.*", "", nome).strip()
         if not nome:
             continue
+
         try:
             valor = float(valor_txt.replace(".", "").replace(",", "."))
-        except:
+        except Exception:
             continue
         if valor <= 0:
             continue
@@ -254,25 +213,12 @@ async def detalhe_bb(file_bytes: bytes):
         nome = nome_limpo
 
         dados.append({
-            "data": data,
+            "data": data_linha or f"??/??/{ano_padrao}",
             "hora": hora,
             "nome": nome,
             "valor": valor,
-            "banco": "BB"
+            "banco": "BB",
         })
-
-    padrao_cnpj = re.compile(
-        r"(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+[0-9]{6,}\s+(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}|\d{11,14})\s+([\d\.,]+)\s*\(\+\)",
-        re.IGNORECASE,
-    )
-    for m in padrao_cnpj.finditer(texto_limpo):
-        data_curta, hora, cnpj_raw, valor_txt = m.groups()
-        nome = f"Cliente CNPJ {re.sub(r'[^0-9]', '', cnpj_raw)}"
-        try:
-            valor = float(valor_txt.replace(".", "").replace(",", "."))
-        except:
-            continue
-        dados.append({"data": f"{data_curta}/2025", "hora": hora, "nome": nome, "valor": valor, "banco": "BB"})
 
     unicos = []
     vistos = set()
@@ -607,214 +553,210 @@ async def conferir_caixa(
     faltando_no_pdf = []
     faltando_no_excel = []
 
-    # ============================
-    # MATCH Excel → PDF
-    # ============================
-    for item in dados_excel:
-        nome_excel = item["nome"]
-        valor_excel = round(item.get("valor") or 0.0, 2)
-        hora_excel = normalizar_hora(item.get("hora", ""))
-        agente_excel = item.get("agente", "")
+    n_excel = len(dados_excel)
+    n_pdf = len(dados_pdf)
 
-        escolhido = None
-        candidatos = []
-        melhor_ja_usado = None
-
-        for idx, p in enumerate(dados_pdf):
-            nome_pdf = p["nome"]
-            valor_pdf = round(p.get("valor") or 0.0, 2)
-            hora_pdf = normalizar_hora(p.get("hora", ""))
-
-            if abs(valor_excel - valor_pdf) < 0.01:
-                sim = similaridade(nome_excel, nome_pdf)
-
-                ne = normalizar(nome_excel)
-                np = normalizar(nome_pdf)
-
-                if ne in np:
-                    sim = max(sim, 0.90)
-                elif np in ne:
-                    sim = max(sim, 0.90)
-                else:
-                    if set(ne.split()).intersection(set(np.split())):
-                        sim = max(sim, min(0.75, sim + 0.20))
-
-                hora_ok = True
-                hora_delta = 999999
-
-                if hora_excel and hora_pdf:
-                    try:
-                        t1 = datetime.strptime(hora_excel, "%H:%M")
-                        t2 = datetime.strptime(hora_pdf, "%H:%M")
-                        hora_delta = abs((t1 - t2).total_seconds())
-                        hora_ok = hora_delta <= 600
-                    except:
-                        pass
-
-                if idx in usados_pdf:
-                    score_dup = (sim * 100) + (20 if hora_ok else 0) - (hora_delta / 1000)
-                    if (melhor_ja_usado is None) or (score_dup > melhor_ja_usado["score"]):
-                        melhor_ja_usado = {
-                            "idx": idx,
-                            "score": score_dup,
-                            "sim": sim,
-                            "hora_ok": hora_ok,
-                            "hora_delta": hora_delta,
-                            "valor_pdf": valor_pdf,
-                            "nome_pdf": nome_pdf,
-                            "hora_pdf": hora_pdf,
-                            "data_pdf": p.get("data"),
-                            "usado_por": usado_por.get(idx),
-                        }
-                    continue
-
-                candidatos.append({
-                    "idx": idx,
-                    "sim": sim,
-                    "hora_ok": hora_ok,
-                    "hora_delta": hora_delta,
-                    "valor_pdf": valor_pdf,
-                    "nome_pdf": nome_pdf,
-                    "hora_pdf": hora_pdf,
-                    "data_pdf": p.get("data"),
-                })
-
-        if candidatos:
-            candidatos.sort(key=lambda x: (
-                not x["hora_ok"],
-                -x["sim"],
-                x["hora_delta"]
-            ))
-            escolhido = candidatos[0]
-
-        if escolhido and (
-            escolhido["sim"] >= 0.70 or
-            (escolhido["sim"] >= 0.55 and abs(valor_excel - escolhido["valor_pdf"]) < 0.01)
-        ):
-            idx_escolhido = escolhido["idx"]
-            usados_pdf.add(idx_escolhido)
-            usado_por[idx_escolhido] = {
-                "agente": agente_excel,
-                "nome_excel": nome_excel,
-                "valor": valor_excel,
-                "hora": hora_excel,
+    # ==========================================================
+    # MATCH Excel → PDF (atribuição ótima — algoritmo húngaro)
+    # ==========================================================
+    # Antes: cada lançamento do Excel era casado na ordem em que aparecia na
+    # planilha e "travava" o melhor PDF disponível na hora — um casamento
+    # guloso. Isso deixa o resultado dependente da ordem das linhas: um
+    # lançamento no topo da planilha podia roubar o PDF que seria o par
+    # perfeito de outro lançamento mais abaixo, gerando divergências
+    # evitáveis. Aqui montamos uma matriz de pontuação Excel × PDF e
+    # resolvemos como problema de atribuição (scipy.optimize.linear_sum_assignment),
+    # encontrando a combinação que maximiza a soma de todas as pontuações ao
+    # mesmo tempo — não apenas a melhor escolha local de cada linha.
+    if n_excel and n_pdf:
+        excel_info = [
+            {
+                "nome": item["nome"],
+                "valor": round(item.get("valor") or 0.0, 2),
+                "hora": normalizar_hora(item.get("hora", "")),
             }
+            for item in dados_excel
+        ]
+        pdf_info = [
+            {
+                "nome": p["nome"],
+                "valor": round(p.get("valor") or 0.0, 2),
+                "hora": normalizar_hora(p.get("hora", "")),
+            }
+            for p in dados_pdf
+        ]
 
-            conferidos.append({
-                "agente": agente_excel,
-                "nome_excel": nome_excel,
-                "nome_pdf": escolhido["nome_pdf"],
-                "valor_excel": valor_excel,
-                "valor_pdf": escolhido["valor_pdf"],
-                "hora_excel": hora_excel,
-                "hora_pdf": escolhido["hora_pdf"],
-                "data_pdf": escolhido["data_pdf"],
-                "similaridade": round(escolhido["sim"], 2),
-                "analise": "ok",
-                "banco": dados_pdf[idx_escolhido].get("banco"),
-            })
-            continue
+        CUSTO_INVIAVEL = 1e6  # par com valor incompatível: nunca deve ser escolhido
 
-        melhor_pontuacao = -999999
-        possivel = None
+        def pontuar(e, p):
+            dif_valor = abs(e["valor"] - p["valor"])
+            if dif_valor > 0.50:
+                return None
 
-        candidatos_valor = []
-        for idx, p in enumerate(dados_pdf):
-            if idx in usados_pdf:
-                continue
-            if abs(valor_excel - round(p.get("valor", 0), 2)) <= 0.50:
-                candidatos_valor.append((idx, p))
+            sim = similaridade(e["nome"], p["nome"])
+            ne, npn = normalizar(e["nome"]), normalizar(p["nome"])
+            tok_e, tok_p = set(ne.split()), set(npn.split())
 
-        lista_busca = candidatos_valor if candidatos_valor else [(idx, p) for idx, p in enumerate(dados_pdf) if idx not in usados_pdf]
-
-        for idx, p in lista_busca:
-            nome_pdf = p["nome"]
-            valor_pdf = round(p.get("valor") or 0.0, 2)
-            hora_pdf = normalizar_hora(p.get("hora", ""))
-
-            sim = similaridade(nome_excel, nome_pdf)
-
-            ne = normalizar(nome_excel)
-            np = normalizar(nome_pdf)
-
-            if ne in np:
-                sim = max(sim, 0.90)
-            elif np in ne:
+            if ne == npn:
+                sim = max(sim, 0.95)
+            elif (ne in npn or npn in ne) and len(tok_e) >= 2 and len(tok_p) >= 2:
                 sim = max(sim, 0.90)
             else:
-                if set(ne.split()).intersection(set(np.split())):
-                    sim = max(sim, min(0.75, sim + 0.20))
+                comuns = tok_e & tok_p
+                if len(comuns) >= 2:
+                    # nome E sobrenome batendo: sinal forte de ser a mesma pessoa
+                    sim = max(sim, min(0.85, sim + 0.20))
+                elif len(tok_e) >= 2 and len(tok_p) >= 2:
+                    # Nomes com várias palavras que só coincidem em NO MÁXIMO
+                    # um token — tipicamente um primeiro nome ou sobrenome
+                    # comum (Maria, José, Ana, Souza...). Isso não é sinal
+                    # confiável de ser a mesma pessoa, mesmo quando o
+                    # SequenceMatcher bruto dá um número enganosamente alto
+                    # só por coincidência de tamanho/caracteres — foi
+                    # exatamente esse caso que gerou falsos positivos reais
+                    # (ex: "Ana Gabrielly Cunha Mesquita" casando com "Ana
+                    # Rafaele", "Maria Maia" com "Maria Eduarda"). Suprime em
+                    # vez de confiar.
+                    sim = min(sim, 0.45)
 
-            dif_valor = abs(valor_excel - valor_pdf)
-
+            # O horário só ajuda ou atrapalha quando os DOIS lados o
+            # informam — ausência de horário fica neutra (nem bônus, nem
+            # penalidade). Quando os dois são conhecidos e divergem muito,
+            # a penalidade cresce; um nome+valor batendo não deve mascarar
+            # um horário completamente incompatível.
             hora_bonus = 0
-            if hora_excel and hora_pdf:
+            hora_delta = None
+            if e["hora"] and p["hora"]:
                 try:
-                    t1 = datetime.strptime(hora_excel, "%H:%M")
-                    t2 = datetime.strptime(hora_pdf, "%H:%M")
-                    delta = abs((t1 - t2).total_seconds())
-
-                    if delta <= 10:
+                    t1 = datetime.strptime(e["hora"], "%H:%M")
+                    t2 = datetime.strptime(p["hora"], "%H:%M")
+                    hora_delta = abs((t1 - t2).total_seconds())
+                    if hora_delta <= 10:
                         hora_bonus = 50
-                    elif delta <= 60:
+                    elif hora_delta <= 60:
                         hora_bonus = 35
-                    elif delta <= 300:
+                    elif hora_delta <= 300:
                         hora_bonus = 20
-                    elif delta <= 600:
+                    elif hora_delta <= 600:
                         hora_bonus = 10
-                except:
-                    pass
+                    elif hora_delta <= 3600:
+                        hora_bonus = -20
+                    else:
+                        hora_bonus = -45
+                except Exception:
+                    hora_delta = None
 
-            pontuacao = (sim * 100) - dif_valor + hora_bonus
+            valor_score = 40 if dif_valor < 0.01 else max(0.0, 40 - dif_valor * 60)
+            score = (sim * 100) + valor_score + hora_bonus
+            return score, sim, dif_valor, hora_delta
 
-            if pontuacao > melhor_pontuacao:
-                melhor_pontuacao = pontuacao
-                possivel = (idx, p)
+        custo = np.full((n_excel, n_pdf), CUSTO_INVIAVEL)
+        detalhes = {}
+        for i, e in enumerate(excel_info):
+            for j, p in enumerate(pdf_info):
+                resultado = pontuar(e, p)
+                if resultado is not None:
+                    score, sim, dif_valor, hora_delta = resultado
+                    custo[i, j] = -score
+                    detalhes[(i, j)] = (score, sim, dif_valor, hora_delta)
 
-        if possivel:
-            idx_p, p = possivel
-            valor_pdf = round(p.get("valor") or 0.0, 2)
-            val_dif = abs(valor_excel - valor_pdf)
-            val_msg = (
-                "igual" if val_dif < 0.01 else
-                "próximo" if val_dif <= 0.50 else
-                "diferente"
-            )
-            hora_pdf = normalizar_hora(p.get("hora", ""))
+        linhas, colunas = linear_sum_assignment(custo)
 
-            hora_msg = ""
-            if hora_excel and hora_pdf:
-                if hora_excel == hora_pdf:
-                    hora_msg = f", horário igual ({hora_pdf})"
-                else:
-                    hora_msg = f", horários diferentes (Excel {hora_excel} ≠ PDF {hora_pdf})"
+        GAP_HORA_MAX = 2 * 3600  # 2h: nome+valor batendo não vence um horário muito diferente
 
-            motivo = (
-                f"Nome semelhante encontrado: '{p.get('nome','')}' "
-                f"(Sim={similaridade(nome_excel, p.get('nome','')):.2f}), "
-                f"valor {val_msg} (R${valor_pdf:.2f})"
-                f"{hora_msg}."
-            )
+        aceito_excel = {}
+        aceito_pdf = {}
+        for i, j in zip(linhas, colunas):
+            par = detalhes.get((i, j))
+            if par is None:
+                continue  # atribuição forçada pela matriz (nenhum par viável)
+            score, sim, dif_valor, hora_delta = par
+            aceito = sim >= 0.70 or (sim >= 0.55 and dif_valor < 0.01)
+            if aceito and hora_delta is not None and hora_delta > GAP_HORA_MAX:
+                aceito = False
+            if aceito:
+                aceito_excel[i] = j
+                aceito_pdf[j] = i
 
-            item["banco"] = p.get("banco", "")
-            item["motivo"] = motivo
+        for i, item in enumerate(dados_excel):
+            e = excel_info[i]
+
+            if i in aceito_excel:
+                j = aceito_excel[i]
+                score, sim, dif_valor, hora_delta = detalhes[(i, j)]
+                p_completo = dados_pdf[j]
+                usados_pdf.add(j)
+                usado_por[j] = {
+                    "agente": item.get("agente", ""),
+                    "nome_excel": e["nome"],
+                    "valor": e["valor"],
+                    "hora": e["hora"],
+                }
+                conferidos.append({
+                    "agente": item.get("agente", ""),
+                    "nome_excel": e["nome"],
+                    "nome_pdf": pdf_info[j]["nome"],
+                    "valor_excel": e["valor"],
+                    "valor_pdf": pdf_info[j]["valor"],
+                    "hora_excel": e["hora"],
+                    "hora_pdf": pdf_info[j]["hora"],
+                    "data_pdf": p_completo.get("data"),
+                    "similaridade": round(sim, 2),
+                    "analise": "ok",
+                    "banco": p_completo.get("banco"),
+                })
+                continue
+
+            # Não casou: acha o melhor candidato entre TODOS os PDFs (mesmo
+            # os rejeitados ou já usados por outro agente) só para explicar
+            # o motivo ao usuário.
+            melhor_j, melhor_score, melhor_sim, melhor_dif = None, float("-inf"), 0.0, None
+            for j in range(n_pdf):
+                par = detalhes.get((i, j))
+                if par is None:
+                    continue
+                score, sim, dif_valor, _hora_delta = par
+                if score > melhor_score:
+                    melhor_j, melhor_score, melhor_sim, melhor_dif = j, score, sim, dif_valor
+
+            if melhor_j is not None and melhor_j in aceito_pdf:
+                outro_i = aceito_pdf[melhor_j]
+                outro_agente = dados_excel[outro_i].get("agente", "(desconhecido)")
+                p = pdf_info[melhor_j]
+                item["motivo"] = (
+                    f"PIX já foi conferido por outro agente: {outro_agente} "
+                    f"— {p['nome']} R${p['valor']:.2f} • {p['hora']}"
+                )
+                item["banco"] = dados_pdf[melhor_j].get("banco", "")
+            elif melhor_j is not None:
+                p = pdf_info[melhor_j]
+                val_msg = (
+                    "igual" if melhor_dif < 0.01 else
+                    "próximo" if melhor_dif <= 0.50 else
+                    "diferente"
+                )
+                hora_msg = ""
+                if e["hora"] and p["hora"]:
+                    if e["hora"] == p["hora"]:
+                        hora_msg = f", horário igual ({p['hora']})"
+                    else:
+                        hora_msg = f", horários diferentes (Excel {e['hora']} ≠ PDF {p['hora']})"
+                item["motivo"] = (
+                    f"Nome semelhante encontrado: '{p['nome']}' "
+                    f"(Sim={melhor_sim:.2f}), valor {val_msg} (R${p['valor']:.2f})"
+                    f"{hora_msg}."
+                )
+                item["banco"] = dados_pdf[melhor_j].get("banco", "")
+            else:
+                item["motivo"] = "Nenhum parecido encontrado no PDF (ou já consumido por outro agente)."
+                item["banco"] = ""
+
             faltando_no_pdf.append(item)
-            continue
-
-        if melhor_ja_usado and melhor_ja_usado.get("usado_por"):
-            up = melhor_ja_usado["usado_por"]
-            motivo = (
-                f"PIX já foi conferido por outro agente: {up.get('agente','(desconhecido)')} "
-                f"— {melhor_ja_usado.get('nome_pdf','')} "
-                f"R${melhor_ja_usado.get('valor_pdf',0):.2f} • {melhor_ja_usado.get('hora_pdf','')}"
-            )
-            item["motivo"] = motivo
-            item["banco"] = dados_pdf[melhor_ja_usado["idx"]].get("banco", "")
-        else:
-            item["motivo"] = "Nenhum parecido encontrado no PDF (ou já consumido por outro agente)."
+    else:
+        for item in dados_excel:
+            item["motivo"] = "Nenhum lançamento no PDF para comparar."
             item["banco"] = ""
-
-        faltando_no_pdf.append(item)
+            faltando_no_pdf.append(item)
 
     # ============================
     # PDF → Excel (não usados)

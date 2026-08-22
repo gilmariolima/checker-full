@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-22T00:00:00.000Z",
+  "title": "Design System: Conferência de Caixa",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#f1efe5", "tonalRamp": ["#312d1c", "#5b5434", "#857b4c", "#a99f6a", "#c2ba94", "#d6d1b8", "#e9e6d8", "#f6f5ef"] },
+      "paper-deep": { "role": "neutral", "displayName": "Paper Deep", "canonical": "#e7e2d0", "tonalRamp": ["#312d1b", "#5c5333", "#877a4a", "#ac9d68", "#c3b992", "#d7d0b7", "#e9e5d7", "#f6f4ef"] },
+      "paper-line": { "role": "neutral", "displayName": "Paper Line", "canonical": "#d5cfba", "tonalRamp": ["#2f2b1e", "#575038", "#7f7552", "#a39870", "#bdb598", "#d3cebb", "#e7e4da", "#f5f4ef"] },
+      "card": { "role": "neutral", "displayName": "Card", "canonical": "#faf9f3", "tonalRamp": ["#343018", "#625a2d", "#8f8442", "#b5a95e", "#cac18c", "#dcd6b2", "#ece9d5", "#f7f6ee"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#201d17", "tonalRamp": ["#2c2821", "#524b3d", "#786e59", "#9b8f78", "#b7af9e", "#cfcabf", "#e5e2dc", "#f4f3f0"] },
+      "ink-soft": { "role": "neutral", "displayName": "Ink Soft", "canonical": "#5c5648", "tonalRamp": ["#2a2822", "#4f4b40", "#746d5d", "#978f7d", "#b4afa2", "#cdc9c1", "#e4e2dd", "#f4f3f1"] },
+      "ink-faint": { "role": "neutral", "displayName": "Ink Faint", "canonical": "#948e78", "tonalRamp": ["#2a2922", "#4f4c40", "#736f5e", "#96917d", "#b4b0a2", "#cdcac1", "#e4e2dd", "#f4f3f1"] },
+      "stamp": { "role": "primary", "displayName": "Stamp", "canonical": "#8a1f3d", "tonalRamp": ["#3c101d", "#701f36", "#a42d4e", "#cd476c", "#db7b96", "#e7a7b9", "#f2cfd9", "#faebef"] },
+      "stamp-deep": { "role": "primary", "displayName": "Stamp Deep", "canonical": "#601530", "tonalRamp": ["#3c1020", "#711e3c", "#a52c58", "#cd4677", "#db7a9d", "#e7a7be", "#f2cfdb", "#faebf0"] },
+      "success-ink": { "role": "status", "displayName": "Success Ink", "canonical": "#2f6b3d", "tonalRamp": ["#19341f", "#2e603a", "#448d55", "#61b374", "#8dc89b", "#b3dbbc", "#d6ebdb", "#eef7f0"] },
+      "warning-ink": { "role": "status", "displayName": "Warning Ink", "canonical": "#92590c", "tonalRamp": ["#432b09", "#7e5011", "#b87419", "#e39730", "#ebb46b", "#f2cd9c", "#f8e4c9", "#fcf4e9"] },
+      "error-ink": { "role": "status", "displayName": "Error Ink", "canonical": "#a3271f", "tonalRamp": ["#3e120f", "#73211c", "#a93029", "#d24b42", "#de7e77", "#e9a9a5", "#f3d0ce", "#faebea"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page title in the header." },
+      "headline": { "displayName": "Headline", "purpose": "Section titles within the workspace." },
+      "title": { "displayName": "Title", "purpose": "Panel sub-headings and agent card names." },
+      "body": { "displayName": "Body", "purpose": "Prose: intro copy, field hints." },
+      "data": { "displayName": "Data", "purpose": "Every monetary value, date, time, and agent meta line." },
+      "label": { "displayName": "Label", "purpose": "Small uppercase tags: field format markers, badges." }
+    },
+    "shadows": [
+      { "name": "shadow-sm", "value": "0 1px 3px rgba(32,29,23,.10)", "purpose": "Faint hover lift on panel/agent-card only; nothing shadowed at rest." },
+      { "name": "shadow-md", "value": "0 6px 18px rgba(32,29,23,.12)", "purpose": "Reserved for a future overlay; unused at rest in this flat-paper world." },
+      { "name": "shadow-lg", "value": "0 16px 40px rgba(32,29,23,.16)", "purpose": "Reserved for future modal elevation." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "Default for entrances and interaction feedback (buttons, cards, entries)." },
+      { "name": "ease-in-out", "value": "cubic-bezier(0.77, 0, 0.175, 1)", "purpose": "Reserved for on-screen movement/morphing, not currently used." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "800px" },
+      { "name": "sm", "value": "520px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main call-to-action, e.g. 'Iniciar conferência'. Ink-stamp styling: flat fill, no gradient, press feedback on :active.",
+      "html": "<button class=\"ds-btn-primary\"><span>Iniciar conferência</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; background: #8a1f3d; color: #f1efe5; border: 1.5px solid #8a1f3d; border-radius: 3px; padding: 10px 18px; font-weight: 600; font-size: 0.84rem; font-family: 'IBM Plex Sans', sans-serif; transition: transform 140ms cubic-bezier(0.23,1,0.32,1), background-color 140ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-primary:hover { background: #601530; border-color: #601530; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(138,31,61,.25); }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Secondary action, e.g. 'Limpar'.",
+      "html": "<button class=\"ds-btn-quiet\">Limpar</button>",
+      "css": ".ds-btn-quiet { background: #faf9f3; color: #201d17; border: 1.5px solid #d5cfba; border-radius: 3px; padding: 10px 18px; font-weight: 600; font-size: 0.84rem; font-family: 'IBM Plex Sans', sans-serif; transition: background-color 140ms cubic-bezier(0.23,1,0.32,1), border-color 140ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-quiet:hover { background: #f1efe5; border-color: #948e78; } .ds-btn-quiet:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Summary counter chip; a thin colored top rule replaces the old side-border pattern.",
+      "html": "<div class=\"ds-chip-ok\"><span class=\"ds-chip-icon\">✓</span><span class=\"ds-chip-text\"><small>Conferidos</small><strong>12</strong></span></div>",
+      "css": ".ds-chip-ok { display: inline-flex; align-items: center; gap: 13px; padding: 16px 18px; border-radius: 6px; background: #faf9f3; border: 1px solid #d5cfba; border-top: 2px solid #2f6b3d; font-family: 'IBM Plex Sans', sans-serif; } .ds-chip-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; background: #2f6b3d; font-size: .95rem; } .ds-chip-text { display: flex; flex-direction: column; gap: 2px; } .ds-chip-text small { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #5c5648; } .ds-chip-text strong { font-family: 'IBM Plex Mono', monospace; font-size: 1.4rem; font-weight: 600; color: #2f6b3d; }"
+    },
+    {
+      "name": "Agent Card",
+      "kind": "card",
+      "refersTo": "card-agent",
+      "description": "Collapsible per-agent result card; sector identity carried by a small ink-swatch dot instead of a colored side-border.",
+      "html": "<div class=\"ds-agent-card\"><div class=\"ds-agent-header\"><span class=\"ds-agent-name\">Fulano de Tal <span class=\"ds-agent-suffix\">- Suporte Online</span></span><span class=\"ds-agent-meta\">Conferidos: 8 • Falta PDF: 1 • Falta Excel: 0</span></div></div>",
+      "css": ".ds-agent-card { background: #faf9f3; border-radius: 6px; padding: 16px 18px; border: 1px solid #d5cfba; font-family: 'IBM Plex Sans', sans-serif; } .ds-agent-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; } .ds-agent-name { font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: #201d17; font-size: 0.95rem; } .ds-agent-name::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: #920000; margin-right: 8px; vertical-align: middle; } .ds-agent-suffix { color: #8a1f3d; font-weight: 600; } .ds-agent-meta { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; color: #5c5648; }"
+    },
+    {
+      "name": "Bank Badge",
+      "kind": "chip",
+      "description": "Small rectangular tag identifying the source bank (BB or C6), sharp-cornered.",
+      "html": "<span class=\"ds-badge-bb\">BB</span><span class=\"ds-badge-c6\">C6</span>",
+      "css": ".ds-badge-bb, .ds-badge-c6 { display: inline-block; padding: 2px 7px; font-size: 10.5px; border-radius: 3px; font-weight: 700; margin-right: 6px; letter-spacing: 0.03em; font-family: 'IBM Plex Mono', monospace; } .ds-badge-bb { background: #e4c25a; color: #4a3006; } .ds-badge-c6 { background: #201d17; color: #f1efe5; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "description": "Upload/text input, Plex Mono type, stamp-colored focus ring.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Nome encontrado no PDF\" />",
+      "css": ".ds-input { padding: 10px 12px; border: 1px solid #d5cfba; border-radius: 3px; font-size: 0.82rem; font-family: 'IBM Plex Mono', monospace; background: #faf9f3; width: 100%; } .ds-input:focus { outline: none; border-color: #8a1f3d; box-shadow: 0 0 0 3px rgba(138,31,61,.14); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Fita de Caixa Registradora (Register Tape)",
+    "overview": "This is a redesign, replacing the earlier 'Trust Ledger' fintech-SaaS world (navy header, blue→purple gradient, pill buttons) with a world literal to the product's own name: a 'Conferência de Caixa' (cash register reconciliation) rendered as an actual register tape. The page reads as paper, not glass: warm off-white receipt stock, ink-black type, a single stamp-red accent used the way a rubber 'CONFERIDO' stamp is used — sparingly, with authority, never as a gradient wash.\n\nEvery rectangle in the previous world was a pill or a heavily rounded card; this world cuts paper instead — small, consistent corner radii (3/6/10px), dashed borders standing in for perforation lines, and a literal torn/perforated edge under the header where the 'tape' separates from the machine. Status is still carried by the same three-color vocabulary as before, but rendered as small ink swatches and colored text rather than thick side borders.",
+    "keyCharacteristics": [
+      "Paper-and-ink material world: warm off-white ground, near-black ink text, one stamp-red accent — no gradients anywhere",
+      "Monospace (IBM Plex Mono) for every heading, label, and data value — the 'printed' register-tape voice; IBM Plex Sans carries prose only",
+      "Small, consistent corner radii and dashed 'perforation' borders replace the old pill/gradient language entirely",
+      "Status and sector identity read through small ink-swatch dots and text color, never a thick colored side-border"
+    ],
+    "rules": [
+      { "name": "The One Stamp Rule", "body": "#8a1f3d is the only saturated color used for brand/interactive purposes. It never appears as a gradient, wash, or background fill larger than a button or icon.", "section": "colors" },
+      { "name": "The No-Gradient Rule", "body": "This world has zero gradients, replacing the prior 'Trust Ledger' world's blue→purple CTA gradient entirely. Flat ink or flat stamp-red only.", "section": "colors" },
+      { "name": "The Printed-Numbers Rule", "body": "Any value that is a number, a date, a time, or currency renders in Plex Mono, never Plex Sans — this is what makes the page read as a ledger rather than an app.", "section": "typography" },
+      { "name": "The Flat-Paper Rule", "body": "Nothing floats. A card sitting on the page looks like paper sitting on paper — bordered, not elevated — until the user's cursor proves it's interactive.", "section": "elevation" },
+      { "name": "The Cut-Paper Rule", "body": "Every corner resolves to 3, 6, or 10px. A pill anywhere in this system is a regression to the old world, not a valid exception.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do render every number, date, and time in IBM Plex Mono — this is the detail that sells the 'printed tape' concept.",
+      "Do keep the Stamp accent (#8a1f3d) flat — no gradients, no tints used as backgrounds.",
+      "Do resolve every corner to 3/6/10px; no pills.",
+      "Do use dashed borders specifically to signal a 'perforation' (upload zones, export button, dividers) — not as a generic input style."
+    ],
+    "donts": [
+      "Don't reintroduce a side-border color accent on cards or entries — use the ink-swatch dot pattern instead.",
+      "Don't mix in the prior world's blue/purple tokens; they are fully retired, not a fallback.",
+      "Don't add shadow-driven elevation at rest; this world's depth comes from paper/ink contrast and borders.",
+      "Don't use emoji as inline icons in the live UI — Bootstrap Icons is the icon system throughout."
+    ]
+  }
+}

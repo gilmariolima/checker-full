@@ -74,8 +74,146 @@ function getManualBaseFromEntry(btn) {
   return { baseNome, baseValorNum, baseValorRaw };
 }
 
+/* ============================================= */
+/* AUTOCOMPLETE — Base manual sugere a partir de  */
+/* "Faltando no Excel" enquanto o usuário digita  */
+/* ============================================= */
+function normalizarBusca(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function extrairItensFaltandoExcel() {
+  const itens = [];
+  document.querySelectorAll(".entry.err").forEach((el) => {
+    const strong = el.querySelector("strong");
+    if (!strong) return;
+    const nome = strong.textContent.trim().replace(/^(BB|C6)\s*/, "").trim();
+    if (!nome) return;
+
+    const smallPdf = Array.from(el.querySelectorAll("small")).find((s) =>
+      /R\$/.test(s.textContent)
+    );
+    if (!smallPdf) return;
+
+    const texto = smallPdf.textContent || "";
+    const mValor = texto.match(/R\$[\s]*([\d.,]+)/);
+    const mHora = texto.match(/(\d{2}:\d{2})/);
+    if (!mValor) return;
+
+    itens.push({
+      nome,
+      valorTexto: mValor[1].trim(),
+      hora: mHora ? mHora[1] : "",
+      banco: el.querySelector(".bank-badge")?.textContent.trim() || "",
+    });
+  });
+  return itens;
+}
+
+function renderizarSugestoes(container, itens) {
+  if (!itens.length) {
+    container.hidden = true;
+    container.innerHTML = "";
+    container._itens = null;
+    return;
+  }
+  container.innerHTML = itens
+    .map(
+      (it, i) => `
+    <div class="manual-suggest-item" data-idx="${i}">
+      <span>${badgeBanco(it.banco)}${it.nome}</span>
+      <span class="manual-suggest-meta">R$ ${it.valorTexto}${it.hora ? " • " + it.hora : ""}</span>
+    </div>`
+    )
+    .join("");
+  container._itens = itens;
+  container.hidden = false;
+}
+
+document.addEventListener("input", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("base-nome")) return;
+
+  const container = e.target.closest(".manual-base")?.querySelector(".manual-suggest");
+  if (!container) return;
+
+  const query = normalizarBusca(e.target.value);
+  if (query.length < 1) {
+    container.hidden = true;
+    container.innerHTML = "";
+    container._itens = null;
+    return;
+  }
+
+  const filtrados = extrairItensFaltandoExcel()
+    .filter((it) => normalizarBusca(it.nome).includes(query))
+    .slice(0, 8);
+  renderizarSugestoes(container, filtrados);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("base-nome")) return;
+  const container = e.target.closest(".manual-base")?.querySelector(".manual-suggest");
+  if (!container || container.hidden) return;
+
+  const itens = Array.from(container.querySelectorAll(".manual-suggest-item"));
+  if (!itens.length) return;
+
+  let idx = itens.findIndex((i) => i.classList.contains("is-active"));
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    idx = (idx + 1) % itens.length;
+    itens.forEach((i) => i.classList.remove("is-active"));
+    itens[idx].classList.add("is-active");
+    itens[idx].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    idx = idx <= 0 ? itens.length - 1 : idx - 1;
+    itens.forEach((i) => i.classList.remove("is-active"));
+    itens[idx].classList.add("is-active");
+    itens[idx].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    (idx >= 0 ? itens[idx] : itens[0]).click();
+  } else if (e.key === "Escape") {
+    container.hidden = true;
+    container.innerHTML = "";
+    container._itens = null;
+  }
+});
+
+document.addEventListener("click", (e) => {
+  const item = e.target.closest(".manual-suggest-item");
+  if (item) {
+    const container = item.closest(".manual-suggest");
+    const it = container?._itens?.[parseInt(item.dataset.idx, 10)];
+    if (it) {
+      const manualBase = container.closest(".manual-base");
+      const inputNome = manualBase.querySelector(".base-nome");
+      const inputValor = manualBase.querySelector(".base-valor");
+      inputNome.value = it.nome;
+      inputValor.value = it.valorTexto;
+      container.hidden = true;
+      container.innerHTML = "";
+      container._itens = null;
+    }
+    return;
+  }
+  // clique fora de qualquer sugestão: fecha as que estiverem abertas
+  document.querySelectorAll(".manual-suggest").forEach((c) => {
+    if (!c.hidden) {
+      c.hidden = true;
+      c.innerHTML = "";
+      c._itens = null;
+    }
+  });
+});
+
 let bancoDetectado = '';
-let dataConferenciaAtual = '';
 
 document.getElementById('btnConferir').addEventListener('click', async () => {
   const pdf = document.getElementById('pdfFile').files[0];
@@ -148,37 +286,35 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
         <div class='circle-wrap'>
           <svg class='progress-ring' width='38' height='38'>
             <circle stroke='#e5e7eb' stroke-width='4' fill='transparent' r='16' cx='19' cy='19'></circle>
-            <circle stroke='${perc == 100 ? '#16a34a' : '#0a66c2'}' stroke-width='4' fill='transparent' r='16' cx='19' cy='19'
+            <circle stroke='${perc == 100 ? '#2f6b3d' : '#8a1f3d'}' stroke-width='4' fill='transparent' r='16' cx='19' cy='19'
               stroke-dasharray='${2 * Math.PI * 16}' stroke-dashoffset='${(1 - perc / 100) * 2 * Math.PI * 16}'></circle>
           </svg>
           <div class='circle-inner'>${perc}%</div>
         </div>`;
 
-      function classeSetor(agente) {
+      function infoSetor(agente) {
         const t = (agente || "").toUpperCase();
 
-        if (t.includes("SUPORTE ONLINE")) return "setor-suporte";
-        if (t.includes("VALE VIAGENS")) return "setor-vale";
-        if (t.includes("CANOA")) return "setor-canoa";
-        if (t.includes("TOP VIAGENS") || t.includes("TOP")) return "setor-top";
+        if (t.includes("SUPORTE ONLINE")) return { classe: "setor-suporte", badge: "sector-badge-suporte", label: "SUP" };
+        if (t.includes("VALE VIAGENS")) return { classe: "setor-vale", badge: "sector-badge-vale", label: "VALE" };
+        if (t.includes("CANOA")) return { classe: "setor-canoa", badge: "sector-badge-canoa", label: "CANOA" };
+        if (t.includes("TOP VIAGENS") || t.includes("TOP")) return { classe: "setor-top", badge: "sector-badge-top", label: "TOP" };
 
-        return "";
+        return { classe: "", badge: "", label: "" };
       }
 
+      const setor = infoSetor(agente);
+
       html += `
-        <div class='agent-card ${classeSetor(agente)}'>
+        <div class='agent-card ${setor.classe}'>
           <div class='agent-header' onclick='toggleAgent("${id}")'>
             <div>
               <span class='agent-name'>
+                ${setor.label ? `<span class="sector-badge ${setor.badge}">${setor.label}</span>` : ""}
                 <i class='bi bi-person-circle'></i>
                 ${(() => {
                   const match = agente.match(/^(.*?)(?:\s*-\s*|\s+)(SUPORTE\s+ONLINE|VALE\s+VIAGENS|TOP\s+VIAGENS|AG[ÊE]NCIA|VALE\s+AG[ÊE]NCIA)$/i);
-                  if (match) {
-                    const nomeBase = match[1].trim();
-                    const sufixo = match[2].trim();
-                    return `${nomeBase} <span class='agent-suffix'>- ${sufixo}</span>`;
-                  }
-                  return agente;
+                  return match ? match[1].trim() : agente;
                 })()}
               </span><br>
 
@@ -191,7 +327,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
               <!-- ================= CONFIRMADOS ================= -->
               <div class='fw-bold text-success mb-2 conferidos-titulo'>
-                ✅ Conferidos (${d.conferidos.length}) —
+                <i class="bi bi-check-circle"></i> Conferidos (${d.conferidos.length}) —
                 Total: <span class='total-conferidos'>
                   ${formatCurrency(
                     d.conferidos.reduce((acc, x) => acc + (x.valor_excel || x.valor_pdf || 0), 0)
@@ -241,7 +377,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
               <!-- ================= FALTANDO NO PDF ================= -->
               <div class='fw-bold text-warning mt-3 mb-2'>
-                ⚠️ Faltando no PDF (${d.faltando_pdf.length})
+                <i class="bi bi-exclamation-triangle"></i> Faltando no PDF (${d.faltando_pdf.length})
               </div>
 
               ${d.faltando_pdf
@@ -269,7 +405,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
                     <!-- ✅ NOVO: VOCÊ DIGITA -->
                     <div class="manual-base mt-2">
-                      <div class="manual-base-title">🔎 Base manual (você preenche)</div>
+                      <div class="manual-base-title"><i class="bi bi-search"></i> Base manual (você preenche)</div>
 
                       <div class="manual-base-row">
                         <input
@@ -285,9 +421,10 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                           value="${(x.base_valor || '').toString().replace(/"/g,'&quot;')}"
                         />
                       </div>
+                      <div class="manual-suggest" hidden></div>
 
                       <div class="manual-base-hint">
-                        Preencha e clique ✅ para confirmar manualmente.
+                        Preencha e clique em confirmar (<i class="bi bi-check-circle"></i>) para validar manualmente.
                       </div>
                     </div>
 
@@ -308,7 +445,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
               <!-- ================= FALTANDO NO EXCEL ================= -->
               <div class='fw-bold text-danger mt-3 mb-2'>
-                ❌ Faltando no Excel (${d.faltando_excel.length})
+                <i class="bi bi-x-circle"></i> Faltando no Excel (${d.faltando_excel.length})
               </div>
 
               ${d.faltando_excel
@@ -372,8 +509,8 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
         const header = card.querySelector('.agent-header');
         if (header) {
           header.innerHTML = `
-            <div class="fw-bold" style="color:#a31515; font-size:1.1rem;">
-              ❌ FALTANDO EXCEL : ${faltandoExcelCount}
+            <div class="fw-bold" style="color:#a3271f; font-size:1.1rem;">
+              <i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${faltandoExcelCount}
             </div>
           `;
         }
@@ -444,19 +581,19 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
           const confTituloEl = card.querySelector('.conferidos-titulo');
           if (confTituloEl) {
-            confTituloEl.innerHTML = `✅ Conferidos (${conferidosCount}) — Total: <span class='total-conferidos'>${formatCurrency(totalValor)}</span>`;
+            confTituloEl.innerHTML = `<i class="bi bi-check-circle"></i> Conferidos (${conferidosCount}) — Total: <span class='total-conferidos'>${formatCurrency(totalValor)}</span>`;
           }
 
           const faltTituloEl = card.querySelector('.fw-bold.text-warning');
           if (faltTituloEl) {
-            faltTituloEl.innerHTML = `⚠️ Faltando no PDF (${faltandoCount})`;
+            faltTituloEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Faltando no PDF (${faltandoCount})`;
           }
 
           const isSemAgenteHeader = (card.querySelector('.agent-header')?.innerText || '').toUpperCase().includes('FALTANDO EXCEL');
           if (isSemAgenteHeader) {
             const headerDiv = card.querySelector('.agent-header div');
             if (headerDiv) {
-              headerDiv.innerHTML = `❌ FALTANDO EXCEL : ${faltaExcelCount}`;
+              headerDiv.innerHTML = `<i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${faltaExcelCount}`;
             }
           }
 
@@ -471,7 +608,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             const offset = ((1 - perc / 100) * circ).toFixed(2);
             circle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.3s ease';
             circle.setAttribute('stroke-dashoffset', offset);
-            circle.setAttribute('stroke', perc === 100 ? '#16a34a' : '#0a66c2');
+            circle.setAttribute('stroke', perc === 100 ? '#2f6b3d' : '#8a1f3d');
             inner.textContent = `${perc}%`;
           }
 
@@ -498,7 +635,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             const card = agentContent.closest('.agent-card');
             if (card) {
               card.style.transition = 'box-shadow 0.2s';
-              card.style.boxShadow = '0 0 0 3px rgba(10,102,194,0.08)';
+              card.style.boxShadow = '0 0 0 3px rgba(138,31,61,0.14)';
               setTimeout(() => card.style.boxShadow = '', 350);
             }
           }
@@ -794,7 +931,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
           const localCount = semAgenteCard.querySelectorAll(".entry.err").length;
           const tituloSemAgente = semAgenteCard.querySelector(".fw-bold");
           if (tituloSemAgente) {
-            tituloSemAgente.innerHTML = `❌ FALTANDO EXCEL : ${localCount}`;
+            tituloSemAgente.innerHTML = `<i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${localCount}`;
           }
 
           document.getElementById("totalFaltaExcel").textContent =
@@ -830,7 +967,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             </div>
 
             <div class="manual-base mt-2">
-              <div class="manual-base-title">🔎 Base manual (você preenche)</div>
+              <div class="manual-base-title"><i class="bi bi-search"></i> Base manual (você preenche)</div>
               <div class="manual-base-row">
                 <input type="text" class="form-control form-control-sm base-nome"
                   placeholder="Nome encontrado no PDF"
@@ -839,7 +976,8 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
                   placeholder="Valor (ex: 16,50)"
                   value="${(baseValorSaved || '').toString().replace(/"/g,'&quot;')}" />
               </div>
-              <div class="manual-base-hint">Preencha e clique ✅ para confirmar manualmente.</div>
+              <div class="manual-suggest" hidden></div>
+              <div class="manual-base-hint">Preencha e clique em confirmar (<i class="bi bi-check-circle"></i>) para validar manualmente.</div>
             </div>
 
             ${motivoRaw ? `
@@ -883,46 +1021,11 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('pdfFile').value = '';
   document.getElementById('excelFile').value = '';
-  document.getElementById('dataFiltro').value = '';
   document.getElementById('resultado').innerHTML = '';
   document.getElementById('totalConferidos').textContent = '0';
   document.getElementById('totalFaltaPdf').textContent = '0';
   document.getElementById('totalFaltaExcel').textContent = '0';
-  dataConferenciaAtual = '';
 });
-function formatarDataBR(dataStr) {
-  if (!dataStr) return '';
-  const s = String(dataStr).trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [ano, mes, dia] = s.split('-');
-    return `${dia}/${mes}/${ano}`;
-  }
-
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
-    return s;
-  }
-
-  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
-    const [dia, mes, ano] = s.split('-');
-    return `${dia}/${mes}/${ano}`;
-  }
-
-  return s;
-}
-
-function extrairDataRelatorio() {
-  if (dataConferenciaAtual) {
-    return formatarDataBR(dataConferenciaAtual);
-  }
-
-  const dataFiltro = document.getElementById('dataFiltro')?.value?.trim();
-  if (dataFiltro) {
-    return formatarDataBR(dataFiltro);
-  }
-
-  return new Date().toLocaleDateString('pt-BR');
-}
 
 function parseValorBRL(texto) {
   if (!texto) return 0;
@@ -931,16 +1034,7 @@ function parseValorBRL(texto) {
   return parseFloat(m[1].replace(/\./g, '').replace(',', '.')) || 0;
 }
 function formatarDataRelatorioDoInput() {
-  const valor = document.getElementById('dataFiltro')?.value?.trim();
-
-  if (!valor) return 'Não informada';
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    const [ano, mes, dia] = valor.split('-');
-    return `${dia}/${mes}/${ano}`;
-  }
-
-  return valor;
+  return new Date().toLocaleDateString('pt-BR');
 }
 
 document.getElementById('btnExport').addEventListener('click', async () => {
@@ -1007,21 +1101,21 @@ document.getElementById('btnExport').addEventListener('click', async () => {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <style>
-      * { font-family: Arial, sans-serif !important; color:#111 !important; }
-      h2 { margin: 0; }
+      * { font-family: 'Courier New', monospace !important; color:#201d17 !important; }
+      h2 { margin: 0; letter-spacing: 0.04em; text-transform: uppercase; font-size: 16px; }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
       th, td { border: 1px solid #ccc; padding: 6px; }
-      th { background: #0a66c2; color: #fff !important; }
+      th { background: #8a1f3d; color: #fff !important; }
       td { background: #fff; }
       .topo { text-align:center; margin-bottom:10px; }
       .linha { margin:2px 0; font-size:12px; }
-      hr { margin: 10px 0; }
+      hr { margin: 10px 0; border-top: 1px dashed #ccc; }
     </style>
 
     <div class="topo">
-      <h2>📊 Resumo de Conferência de Caixa</h2>
+      <h2>Resumo de Conferência de Caixa</h2>
       <div class="linha">Banco: <strong>${bancoDetectado}</strong> • Data: <strong>${dataRelatorio}</strong></div>
-      <div class="linha">✅ Conferidos: ${totalC} • ⚠️ Falta PDF: ${totalP} • ❌ Falta Excel: ${totalE}</div>
+      <div class="linha">Conferidos: ${totalC} • Falta PDF: ${totalP} • Falta Excel: ${totalE}</div>
       <hr>
     </div>
 
