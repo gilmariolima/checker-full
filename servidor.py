@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 import unicodedata
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-from typing import List, Dict, Any
+from typing import List
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 

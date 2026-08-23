@@ -3,9 +3,10 @@ __pycache__/
 .venv/
 
 pdf_debug.txt
-uvicorn_log.txt
+*.log
 
 .claude/
 .agents/
 .codex/
 skills-lock.json
+.impeccable/hook.cache.json
