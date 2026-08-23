@@ -510,7 +510,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
         if (header) {
           header.innerHTML = `
             <div class="fw-bold" style="color:#a3271f; font-size:1.1rem;">
-              <i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${faltandoExcelCount}
+              <i class="bi bi-x-circle"></i> PIX RESTANTES : ${faltandoExcelCount}
             </div>
           `;
         }
@@ -589,11 +589,11 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             faltTituloEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Faltando no PDF (${faltandoCount})`;
           }
 
-          const isSemAgenteHeader = (card.querySelector('.agent-header')?.innerText || '').toUpperCase().includes('FALTANDO EXCEL');
+          const isSemAgenteHeader = (card.querySelector('.agent-header')?.innerText || '').toUpperCase().includes('PIX RESTANTES');
           if (isSemAgenteHeader) {
             const headerDiv = card.querySelector('.agent-header div');
             if (headerDiv) {
-              headerDiv.innerHTML = `<i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${faltaExcelCount}`;
+              headerDiv.innerHTML = `<i class="bi bi-x-circle"></i> PIX RESTANTES : ${faltaExcelCount}`;
             }
           }
 
@@ -885,7 +885,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
           .find(card =>
             card.querySelector(".agent-header")?.innerText
               .toUpperCase()
-              .includes("FALTANDO EXCEL")
+              .includes("PIX RESTANTES")
           );
 
         if (semAgenteCard) {
@@ -931,7 +931,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
           const localCount = semAgenteCard.querySelectorAll(".entry.err").length;
           const tituloSemAgente = semAgenteCard.querySelector(".fw-bold");
           if (tituloSemAgente) {
-            tituloSemAgente.innerHTML = `<i class="bi bi-x-circle"></i> FALTANDO EXCEL : ${localCount}`;
+            tituloSemAgente.innerHTML = `<i class="bi bi-x-circle"></i> PIX RESTANTES : ${localCount}`;
           }
 
           document.getElementById("totalFaltaExcel").textContent =
@@ -1065,7 +1065,7 @@ document.getElementById('btnExport').addEventListener('click', async () => {
     const headerTxt = card.querySelector('.agent-header')?.innerText?.trim() || '';
     const isSemAgente =
       nome === 'Sem Agente' ||
-      headerTxt.toUpperCase().includes('FALTANDO EXCEL');
+      headerTxt.toUpperCase().includes('PIX RESTANTES');
 
     if (isSemAgente) {
       const itensErr = Array.from(card.querySelectorAll('.entry.err'));
