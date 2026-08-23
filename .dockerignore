@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+
+pdf_debug.txt
+uvicorn_log.txt
+uvicorn_run.log
+
+.git/
+.claude/
+.agents/
+.codex/
+skills-lock.json
