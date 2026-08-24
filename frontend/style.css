@@ -162,12 +162,10 @@ h1, h2, h3, .agent-name, .chip strong, .results-total strong,
 .field-hint { margin: 9px 0 0; color: var(--ink-faint); font-size: .73rem; }
 
 .action-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 18px;
   margin-top: 24px; padding-top: 20px;
   border-top: 1px dashed var(--paper-line);
 }
-.action-copy { color: var(--ink-soft); font-size: .85rem; font-weight: 500; }
-.action-copy i { color: var(--stamp); margin-right: 6px; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .btn {
