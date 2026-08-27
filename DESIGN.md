@@ -86,7 +86,7 @@ components:
 
 This is a redesign, replacing the earlier "Trust Ledger" fintech-SaaS world (navy header, blue→purple gradient, pill buttons) with a world literal to the product's own name: a "Conferência de Caixa" (cash register reconciliation) rendered as an actual register tape. The page reads as paper, not glass: warm off-white receipt stock, ink-black type, a single stamp-red accent used the way a rubber "CONFERIDO" stamp is used — sparingly, with authority, never as a gradient wash.
 
-Every rectangle in the previous world was a pill or a heavily rounded card; this world cuts paper instead — small, consistent corner radii (3/6/10px), dashed borders standing in for perforation lines, and a literal torn/perforated edge under the header where the "tape" separates from the machine. Status (conferido/falta-PDF/falta-Excel) is still carried by the same three-color vocabulary as before, but rendered as small ink swatches and colored text rather than thick side borders, which read as a generic AI-card tell and added nothing the text color didn't already say.
+Every rectangle in the previous world was a pill or a heavily rounded card; this world cuts paper instead — small, consistent corner radii (3/6/10px), dashed borders standing in for perforation lines, and a literal torn/perforated edge under the header where the "tape" separates from the machine. Status (conferido/falta-PDF/falta-Excel) is still carried by the same three-color vocabulary as before, but rendered as small ink swatches and colored text rather than thick side borders, which added nothing the text color didn't already say.
 
 **Key Characteristics:**
 - Paper-and-ink material world: warm off-white ground, near-black ink text, one stamp-red accent — no gradients anywhere
@@ -140,7 +140,7 @@ Two-material palette: paper and ink, plus one stamp-red accent that carries all 
 
 ## Layout
 
-Unchanged from the prior world at the structural level: centered single column, `width: min(1180px, calc(100% - 40px))`, upload panel above results. No eyebrows and no decorative section numbers ("01") — both were removed in this redesign as generic AI-interface tells that added no real wayfinding value on a single-page tool. A dashed `border-top` on the action bar reads as a tear line rather than a plain divider.
+Unchanged from the prior world at the structural level: centered single column, `width: min(1180px, calc(100% - 40px))`, upload panel above results. No eyebrows and no decorative section numbers ("01") — both were removed in this redesign since they added no real wayfinding value on a single-page tool. A dashed `border-top` on the action bar reads as a tear line rather than a plain divider.
 
 ## Elevation & Depth
 
@@ -167,7 +167,7 @@ Register-tape components: rectangular, ink-on-paper, with a stamp-red accent res
 - **Export:** Dashed border (perforation motif) instead of a filled style — visually signals "tear this off," distinct from the two in-app actions.
 
 ### Chips (status summary)
-- **Style:** Card background, thin 2px colored top rule (not a side border — deliberately avoids the "thick side-tab" AI-interface tell the prior world had), circular icon badge in flat status color.
+- **Style:** Card background, thin 2px colored top rule (not a side border — deliberately avoids the "thick side-tab" look the prior world had), circular icon badge in flat status color.
 - **State:** Read-only counters, no selected state.
 
 ### Cards / Containers

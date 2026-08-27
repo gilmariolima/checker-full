@@ -1,6 +1,5 @@
 :root {
   --paper: #f1efe5;
-  --paper-deep: #e7e2d0;
   --paper-line: #d5cfba;
   --card: #faf9f3;
   --ink: #201d17;
@@ -15,10 +14,7 @@
   --radius: 6px;
   --radius-lg: 10px;
   --shadow-sm: 0 1px 3px rgba(32, 29, 23, .10);
-  --shadow-md: 0 6px 18px rgba(32, 29, 23, .12);
-  --shadow-lg: 0 16px 40px rgba(32, 29, 23, .16);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 * { box-sizing: border-box; }
@@ -81,26 +77,9 @@ h1, h2, h3, .agent-name, .chip strong, .results-total strong,
 }
 .header-subtitle { margin: 6px 0 0; color: #cac5b3; font-size: .88rem; font-family: "IBM Plex Mono", monospace; }
 
-/* ============================= */
-/* INTRO                          */
-/* ============================= */
 .workspace-shell { padding: 34px 0 8px; }
-.intro-row, .results-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
-.intro-row { margin-bottom: 26px; }
-.intro-row h2, .results-heading h2 { margin: 0; color: var(--ink); font-size: 1.5rem; font-weight: 600; letter-spacing: 0; }
-.intro-copy { max-width: 62ch; margin: 8px 0 0; color: var(--ink-soft); line-height: 1.55; }
-.status-note {
-  display: flex; gap: 9px; align-items: center;
-  padding: 10px 16px;
-  color: var(--ink-soft);
-  background: var(--card);
-  border: 1px solid var(--paper-line);
-  border-radius: var(--radius-sm);
-  font-size: .78rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.status-note i { color: var(--ok); font-size: 1rem; }
+.results-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.results-heading h2 { margin: 0; color: var(--ink); font-size: 1.5rem; font-weight: 600; letter-spacing: 0; }
 
 /* ============================= */
 /* PANEL                          */
@@ -398,7 +377,7 @@ footer {
 
 @media (max-width: 800px) {
   .upload-grid { grid-template-columns: 1fr; }
-  .action-bar, .intro-row, .results-heading { align-items: flex-start; flex-direction: column; }
+  .action-bar, .results-heading { align-items: flex-start; flex-direction: column; }
   .action-buttons { width: 100%; }
   .action-buttons .btn { flex: 1; }
 }
@@ -407,7 +386,6 @@ footer {
   .main-header { padding: 22px 14px 18px; }
   .panel { padding: 18px; border-radius: var(--radius); }
   .section-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
-  .status-note { width: 100%; white-space: normal; }
 }
 
 .btn + .btn { margin-left: 0; }
