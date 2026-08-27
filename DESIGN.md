@@ -3,7 +3,6 @@ name: Conferência de Caixa
 description: Painel de conferência de PIX entre extratos bancários (BB, C6) e planilhas de agentes
 colors:
   paper: "#f1efe5"
-  paper-deep: "#e7e2d0"
   paper-line: "#d5cfba"
   card: "#faf9f3"
   ink: "#201d17"
@@ -86,7 +85,7 @@ components:
 
 This is a redesign, replacing the earlier "Trust Ledger" fintech-SaaS world (navy header, blue→purple gradient, pill buttons) with a world literal to the product's own name: a "Conferência de Caixa" (cash register reconciliation) rendered as an actual register tape. The page reads as paper, not glass: warm off-white receipt stock, ink-black type, a single stamp-red accent used the way a rubber "CONFERIDO" stamp is used — sparingly, with authority, never as a gradient wash.
 
-Every rectangle in the previous world was a pill or a heavily rounded card; this world cuts paper instead — small, consistent corner radii (3/6/10px), dashed borders standing in for perforation lines, and a literal torn/perforated edge under the header where the "tape" separates from the machine. Status (conferido/falta-PDF/falta-Excel) is still carried by the same three-color vocabulary as before, but rendered as small ink swatches and colored text rather than thick side borders, which added nothing the text color didn't already say.
+Every rectangle in the previous world was a pill or a heavily rounded card; this world cuts paper instead — small, consistent corner radii (3/6/10px), dashed borders standing in for perforation lines, and a literal torn/perforated edge under the header where the "tape" separates from the machine. Status (conferido/falta-PDF/falta-Excel) is still carried by the same three-color vocabulary as before, but rendered as colored text and section grouping rather than thick side borders, which added nothing the text color didn't already say.
 
 **Key Characteristics:**
 - Paper-and-ink material world: warm off-white ground, near-black ink text, one stamp-red accent — no gradients anywhere
@@ -106,7 +105,6 @@ Two-material palette: paper and ink, plus one stamp-red accent that carries all 
 - **Ink Soft** (#5c5648): Secondary text, meta lines, subtitles.
 - **Ink Faint** (#948e78): Tertiary text, hints, placeholders.
 - **Paper** (#f1efe5): Page background — warm off-white register-tape stock.
-- **Paper Deep** (#e7e2d0): Reserved for deeper paper-toned fills where needed.
 - **Paper Line** (#d5cfba): Borders, dashed perforation lines, dividers.
 - **Card** (#faf9f3): Elevated surfaces — panels, cards, entries, inputs. Barely lighter than Paper; elevation here is a border, not a shadow-driven lift.
 
@@ -125,13 +123,13 @@ Two-material palette: paper and ink, plus one stamp-red accent that carries all 
 **Heading/Data Font:** IBM Plex Mono (with Consolas, monospace fallback)
 **Body Font:** IBM Plex Sans (with Segoe UI, sans-serif fallback)
 
-**Character:** A working pair, not a display pairing — Plex Mono gives every number, heading, and label the fixed-width rhythm of a printed receipt; Plex Sans stays out of the way for the handful of prose sentences (intro copy, hints).
+**Character:** A working pair, not a display pairing — Plex Mono gives every number, heading, and label the fixed-width rhythm of a printed receipt; Plex Sans stays out of the way for the handful of prose sentences (field hints, the header subtitle).
 
 ### Hierarchy
 - **Display** (600, clamp(1.4rem, 2.6vw, 1.9rem), Plex Mono, uppercase): Page title in the header.
-- **Headline** (600, 1.5rem, Plex Mono): Section titles ("Compare. Encontre. Resolva.").
+- **Headline** (600, 1.5rem, Plex Mono): Section titles ("Resultado da análise").
 - **Title** (600, 1.05rem, Plex Mono): Panel sub-headings, agent card names.
-- **Body** (400, 0.85rem, Plex Sans): Prose — intro copy, field hints.
+- **Body** (400, 0.85rem, Plex Sans): Prose — field hints, header subtitle.
 - **Data** (400, 0.82rem, Plex Mono): Every monetary value, date, time, agent meta line.
 - **Label** (700, 0.7rem, Plex Mono, letter-spacing 0.08em, uppercase): Small tags — field "PDF"/"XLSX" markers, badges.
 
@@ -140,7 +138,7 @@ Two-material palette: paper and ink, plus one stamp-red accent that carries all 
 
 ## Layout
 
-Unchanged from the prior world at the structural level: centered single column, `width: min(1180px, calc(100% - 40px))`, upload panel above results. No eyebrows and no decorative section numbers ("01") — both were removed in this redesign since they added no real wayfinding value on a single-page tool. A dashed `border-top` on the action bar reads as a tear line rather than a plain divider.
+Unchanged from the prior world at the structural level: centered single column, `width: min(1180px, calc(100% - 40px))`, upload panel above results. No eyebrows and no decorative section numbers — they add no real wayfinding value on a single-page tool. A dashed `border-top` on the action bar reads as a tear line rather than a plain divider.
 
 ## Elevation & Depth
 
@@ -158,7 +156,7 @@ Small, consistent radii: 3px (inputs, badges, buttons, entries), 6px (cards, age
 
 ## Components
 
-Register-tape components: rectangular, ink-on-paper, with a stamp-red accent reserved for the one primary action and for status swatches.
+Register-tape components: rectangular, ink-on-paper, with a stamp-red accent reserved for the one primary action and for status accents.
 
 ### Buttons
 - **Shape:** Short rectangle, 3px radius, 1.5px border.
