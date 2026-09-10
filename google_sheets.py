@@ -1,8 +1,11 @@
 """Leitura privada da base Google Sheets; credenciais somente no servidor."""
 
 import json
+import logging
 import os
 import re
+
+log = logging.getLogger("checker.sheets")
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, Response
@@ -24,8 +27,21 @@ class ImportRequest(BaseModel):
     tipo: Literal["geral", "agencia"] = "geral"
 
 
+def carregar_credenciais_json():
+    """Aceita o JSON puro ou em base64 (evita a quebra da private_key ao colar)."""
+    bruto = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"].strip()
+    if not bruto.startswith("{"):
+        import base64
+        bruto = base64.b64decode(bruto).decode("utf-8")
+    info = json.loads(bruto)
+    # A private_key precisa de quebras reais; alguns painéis guardam "\n" literal.
+    if "private_key" in info:
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+    return info
+
+
 def ler_base(tipo):
-    info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"])
+    info = carregar_credenciais_json()
     # Não aceitar endpoints alternativos vindos de um JSON mal configurado.
     info["token_uri"] = "https://oauth2.googleapis.com/token"
     credentials = service_account.Credentials.from_service_account_info(info, scopes=[SCOPE])
@@ -70,6 +86,8 @@ def importar(data: ImportRequest):
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Cache-Control": "no-store", "X-Agentes": str(len(blocos)),
                      "X-Lancamentos": str(sum(len(b["linhas"]) for b in blocos))})
-    except Exception:
-        # Não devolver erros de bibliotecas com dados/credenciais Google.
+    except Exception as erro:
+        # Não devolver erros de bibliotecas com dados/credenciais Google ao cliente,
+        # mas registrar o tipo nos logs do servidor para diagnóstico.
+        log.exception("Falha ao importar do Google Sheets: %s", type(erro).__name__)
         return JSONResponse({"erro": "Não foi possível acessar a base. Verifique a conexão e a permissão da conta de serviço e tente novamente."}, status_code=502)
