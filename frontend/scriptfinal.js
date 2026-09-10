@@ -1,5 +1,23 @@
 function toggleAgent(id) {
-  document.getElementById(id).classList.toggle('show');
+  const content = document.getElementById(id);
+  const expanded = content.classList.toggle('show');
+  content.previousElementSibling.setAttribute('aria-expanded', String(expanded));
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.target.matches('.agent-header') && ['Enter', ' '].includes(event.key)) {
+    event.preventDefault();
+    event.target.click();
+  }
+});
+
+function setProcessing(processing) {
+  for (const id of ['btnConferir', 'btnLimpar', 'pdfFile', 'excelFile']) {
+    document.getElementById(id).disabled = processing;
+  }
+  document.querySelector('#btnConferir span').textContent = processing ? 'Conferindo arquivos…' : 'Iniciar conferência';
+  document.getElementById('progressArea').style.display = processing ? 'flex' : 'none';
+  document.querySelector('.results-section').setAttribute('aria-busy', String(processing));
 }
 
 function formatCurrency(v) {
@@ -224,7 +242,13 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
   const resEl = document.getElementById('resultado');
   resEl.innerHTML = '';
-  document.getElementById('progressArea').style.display = 'block';
+  document.getElementById('emptyState').hidden = true;
+  document.getElementById('btnExport').disabled = true;
+  for (const id of ['totalConferidos', 'totalFaltaPdf', 'totalFaltaExcel']) {
+    document.getElementById(id).textContent = '0';
+  }
+  document.querySelector('.total-conferidos-topo').textContent = formatCurrency(0);
+  setProcessing(true);
 
   const fd = new FormData();
 
@@ -295,10 +319,10 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       function infoSetor(agente) {
         const t = (agente || "").toUpperCase();
 
-        if (t.includes("SUPORTE ONLINE")) return { classe: "setor-suporte", badge: "sector-badge-suporte", label: "SUP" };
-        if (t.includes("VALE VIAGENS")) return { classe: "setor-vale", badge: "sector-badge-vale", label: "VALE" };
-        if (t.includes("CANOA")) return { classe: "setor-canoa", badge: "sector-badge-canoa", label: "CANOA" };
-        if (t.includes("TOP VIAGENS") || t.includes("TOP")) return { classe: "setor-top", badge: "sector-badge-top", label: "TOP" };
+        if (t.includes("SUPORTE ONLINE")) return { classe: "setor-suporte", badge: "sector-badge-suporte", label: "Suporte Online" };
+        if (t.includes("VALE VIAGENS")) return { classe: "setor-vale", badge: "sector-badge-vale", label: "Vale Viagens" };
+        if (t.includes("CANOA")) return { classe: "setor-canoa", badge: "sector-badge-canoa", label: "Canoa" };
+        if (t.includes("TOP VIAGENS") || t.includes("TOP")) return { classe: "setor-top", badge: "sector-badge-top", label: "Top Viagens" };
 
         return { classe: "", badge: "", label: "" };
       }
@@ -307,20 +331,20 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 
       html += `
         <div class='agent-card ${setor.classe}'>
-          <div class='agent-header' onclick='toggleAgent("${id}")'>
+          <div class='agent-header' role='button' tabindex='0' aria-expanded='false' aria-controls='${id}' onclick='toggleAgent("${id}")'>
             <div>
               <span class='agent-name'>
                 ${setor.label ? `<span class="sector-badge ${setor.badge}">${setor.label}</span>` : ""}
                 <i class='bi bi-person-circle'></i>
                 ${(() => {
-                  const match = agente.match(/^(.*?)(?:\s*-\s*|\s+)(SUPORTE\s+ONLINE|VALE\s+VIAGENS|TOP\s+VIAGENS|AG[ÊE]NCIA|VALE\s+AG[ÊE]NCIA)$/i);
+                  const match = agente.match(/^(.*?)(?:\s*-\s*|\s+)(SUPORTE\s+ONLINE|VALE\s+VIAGENS|TOP\s+VIAGENS|CANOA|AG[ÊE]NCIA|VALE\s+AG[ÊE]NCIA)$/i);
                   return match ? match[1].trim() : agente;
                 })()}
               </span><br>
 
               <span class='agent-meta'>Conferidos: ${d.conferidos.length} • Falta PDF: ${d.faltando_pdf.length} • Falta Excel: ${d.faltando_excel.length}</span>
             </div>
-            ${circle}
+            <div class='agent-progress'>${circle}<i class='bi bi-chevron-down agent-chevron' aria-hidden='true'></i></div>
           </div>
           <div class='agent-content' id='${id}'>
             <div class='mt-3'>
@@ -512,6 +536,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
             <div class="fw-bold" style="color:#a3271f; font-size:1.1rem;">
               <i class="bi bi-x-circle"></i> PIX RESTANTES : ${faltandoExcelCount}
             </div>
+            <i class="bi bi-chevron-down agent-chevron" aria-hidden="true"></i>
           `;
         }
 
@@ -1015,6 +1040,9 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
   } catch (e) {
     document.getElementById('progressArea').style.display = 'none';
     resEl.innerHTML = `<div class='alert alert-danger'>Erro: ${e.message}</div>`;
+  } finally {
+    setProcessing(false);
+    document.getElementById('btnExport').disabled = !resEl.querySelector('.agent-card');
   }
 });
 
@@ -1025,6 +1053,10 @@ document.getElementById('btnLimpar').addEventListener('click', () => {
   document.getElementById('totalConferidos').textContent = '0';
   document.getElementById('totalFaltaPdf').textContent = '0';
   document.getElementById('totalFaltaExcel').textContent = '0';
+  document.querySelector('.total-conferidos-topo').textContent = formatCurrency(0);
+  document.getElementById('emptyState').hidden = false;
+  document.getElementById('btnExport').disabled = true;
+  bancoDetectado = '';
 });
 
 function parseValorBRL(texto) {
@@ -1101,7 +1133,7 @@ document.getElementById('btnExport').addEventListener('click', async () => {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <style>
-      * { font-family: 'Courier New', monospace !important; color:#201d17 !important; }
+      * { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif !important; font-variant-numeric: tabular-nums; color:#201d17 !important; }
       h2 { margin: 0; letter-spacing: 0.04em; text-transform: uppercase; font-size: 16px; }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
       th, td { border: 1px solid #ccc; padding: 6px; }

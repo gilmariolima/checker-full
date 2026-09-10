@@ -432,12 +432,21 @@ async def processar_excel(file_bytes: bytes):
                     nome_agente = re.sub(r"\d+", "", m_ag.group(1)).strip().upper()
 
                 setor = ""
-                try:
-                    ultima_coluna = str(linha.iloc[-1]).strip()
-                    if ultima_coluna and not re.search(r"\d{2}/\d{2}/\d{4}", ultima_coluna):
-                        setor = ultima_coluna.upper()
-                except:
-                    pass
+                # Em células mescladas, o valor fica na primeira coluna;
+                # as demais chegam como NaN ao pandas.
+                for valor_celula in reversed(linha.tolist()):
+                    if pd.isna(valor_celula) or isinstance(valor_celula, (date, datetime)):
+                        continue
+                    candidato = str(valor_celula).strip()
+                    if (
+                        not candidato
+                        or candidato.lower() in ("nan", "none", "-")
+                        or "AGENTE" in candidato.upper()
+                        or try_parse_date(candidato) is not None
+                    ):
+                        continue
+                    setor = candidato.upper()
+                    break
 
                 if nome_agente and setor:
                     agente_atual = f"{nome_agente} - {setor}"
