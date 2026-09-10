@@ -12,7 +12,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 function setProcessing(processing) {
-  for (const id of ['btnConferir', 'btnLimpar', 'pdfFile', 'excelFile']) {
+  for (const id of ['btnConferir', 'btnLimpar', 'pdfFile', 'excelFile', 'fonteDados', 'sheetsData', 'sheetsTipo', 'btnImportarSheets']) {
     document.getElementById(id).disabled = processing;
   }
   document.querySelector('#btnConferir span').textContent = processing ? 'Conferindo arquivos…' : 'Iniciar conferência';
@@ -235,10 +235,10 @@ let bancoDetectado = '';
 
 document.getElementById('btnConferir').addEventListener('click', async () => {
   const pdf = document.getElementById('pdfFile').files[0];
-  const excels = document.getElementById('excelFile').files;
+  const excels = controlFiles();
 
   if (!pdf || excels.length === 0)
-    return alert('Envie o PDF e pelo menos uma planilha Excel!');
+    return alert('Envie o PDF e carregue os dados do Google Sheets ou selecione uma planilha Excel.');
 
   // Reserva espaço para os cabeçalhos multipart dentro do limite da Vercel.
   const arquivos = [...document.getElementById('pdfFile').files, ...excels];
@@ -275,6 +275,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       body: fd
     });
 
+    if (resp.status === 401) { location.replace('/login'); return; }
     if (!resp.ok) {
       throw new Error(resp.status === 413
         ? 'Os arquivos excedem o limite de envio. Reduza o tamanho e tente novamente.'
@@ -1058,6 +1059,7 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
 });
 
 document.getElementById('btnLimpar').addEventListener('click', () => {
+  resetSheets();
   document.getElementById('pdfFile').value = '';
   document.getElementById('excelFile').value = '';
   document.getElementById('resultado').innerHTML = '';

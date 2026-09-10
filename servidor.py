@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException, Request
 import pandas as pd
 import io, re, pdfplumber
 from datetime import datetime, date
@@ -9,26 +9,43 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 from typing import List
 from pathlib import Path
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+
+# Carrega .env em desenvolvimento local; na Vercel as variáveis já vêm do ambiente.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ModuleNotFoundError:
+    pass
+
+from acesso import authenticated, protect, router as auth_router
+from google_sheets import router as sheets_router
 
 # ==========================================================
 # 🚀 Configuração principal
 # ==========================================================
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.middleware("http")(protect)
+app.include_router(auth_router)
+app.include_router(sheets_router)
 
 # ==========================================================
 # 🌐 Servir o Frontend (HTML, CSS, JS e ícone)
 # ==========================================================
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+@app.get("/static/{filename}", include_in_schema=False)
+def static_asset(filename: str):
+    if filename not in {"style.css", "scriptfinal.js", "sheets.js", "login.js", "icone.png", "favicon.png"}:
+        raise HTTPException(status_code=404)
+    return FileResponse(FRONTEND_DIR / filename)
+
+
+@app.get("/login", include_in_schema=False)
+def login_page(request: Request):
+    if authenticated(request):
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(FRONTEND_DIR / "login.html")
 
 @app.get("/")
 def home():

@@ -9,3 +9,7 @@ __pycache__
 *.log
 pdf_debug.txt
 test_*.py
+.env
+.env.*
+*service-account*.json
+configurar_acesso.py

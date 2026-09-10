@@ -35,6 +35,7 @@
         <p class="header-subtitle">Cruze seus extratos e planilhas em poucos passos.</p>
       </div>
       <div class="header-banks" aria-label="Bancos aceitos"><span>Banco do Brasil</span><span>C6 Bank</span></div>
+      <button class="btn header-logout" id="btnSair" type="button"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sair</button>
     </div>
   </header>
   <div class="tear-edge" aria-hidden="true"></div>
@@ -45,7 +46,7 @@
         <div>
           <h2 id="documentos-titulo">Documentos da conferência</h2>
         </div>
-        <span class="required-note"><i class="bi bi-asterisk"></i> PDF e Excel obrigatórios · Até 4 MB no total</span>
+        <span class="required-note"><i class="bi bi-asterisk"></i> PDF + Sheets ou Excel · Até 4 MB no total</span>
       </div>
 
       <div class="upload-grid">
@@ -54,10 +55,26 @@
           <input type="file" id="pdfFile" accept=".pdf" multiple class="form-control" aria-describedby="pdf-hint">
           <p class="field-hint" id="pdf-hint">Aceita extratos do Banco do Brasil e C6 Bank.</p>
         </div>
-        <div class="upload-field">
+        <div class="upload-field" id="controleField">
+          <label class="form-label" for="fonteDados"><span class="field-icon excel-icon"><i class="bi bi-table" aria-hidden="true"></i></span>Dados de controle</label>
+          <select id="fonteDados" class="form-select" aria-label="Origem dos dados">
+            <option value="sheets">Google Sheets</option>
+            <option value="excel">Enviar Excel</option>
+          </select>
+          <div id="sheetsControls">
+            <div class="sheets-filters">
+              <div><label class="form-label" for="sheetsData">Data</label><input type="date" id="sheetsData" class="form-control" required></div>
+              <div><label class="form-label" for="sheetsTipo">Relatório</label><select id="sheetsTipo" class="form-select"><option value="geral">Geral</option><option value="agencia">Agência</option></select></div>
+            </div>
+            <p class="field-hint" id="sheetsGroupHint">Geral inclui todos os agentes da base.</p>
+            <button type="button" id="btnImportarSheets" class="btn btn-quiet w-100"><i class="bi bi-cloud-arrow-down" aria-hidden="true"></i> Carregar dados</button>
+            <p id="sheetsStatus" class="field-hint" role="status" aria-live="polite">Escolha a data para buscar os lançamentos.</p>
+          </div>
+          <div id="excelControls" hidden>
           <label class="form-label" for="excelFile"><span class="field-icon excel-icon"><i class="bi bi-filetype-xlsx"></i></span>Planilhas de controle <small>XLSX</small></label>
           <input type="file" id="excelFile" accept=".xlsx" multiple class="form-control" aria-describedby="excel-hint">
           <p class="field-hint" id="excel-hint">Você pode selecionar mais de uma planilha.</p>
+          </div>
         </div>
       </div>
 
@@ -86,7 +103,7 @@
       <div id="emptyState" class="empty-state">
         <i class="bi bi-journal-check" aria-hidden="true"></i>
         <h3>Tudo pronto para conferir</h3>
-        <p>Selecione seus extratos e planilhas acima.<br>Os resultados aparecerão aqui, organizados por agente e setor.</p>
+        <p>Envie seus extratos e carregue os dados do Sheets ou Excel.<br>Os resultados aparecerão aqui, organizados por agente e setor.</p>
       </div>
       <div id="resultado" class="results-list"></div>
     </section>
@@ -98,6 +115,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <!-- JS externo -->
-  <script src="/static/scriptfinal.js?v=20260910-sans"></script>
+  <script src="/static/sheets.js?v=1"></script>
+  <script src="/static/scriptfinal.js?v=acesso-1"></script>
 </body>
 </html>

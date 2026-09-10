@@ -585,3 +585,28 @@ input { caret-color: var(--stamp); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Acesso dos donos e importação de dados. */
+.header-logout { color: var(--card); border-color: #756e5f; white-space: nowrap; }
+.header-logout:hover { color: var(--card); background: #3c352d; }
+.login-page { display: grid; place-items: center; padding: 32px 20px; }
+.login-shell { width: min(100%, 420px); }
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; font-weight: 600; font-size: 1.1rem; }
+.login-panel h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 10px; }
+.login-description { color: var(--ink-soft); font-size: .95rem; line-height: 1.6; margin-bottom: 24px; }
+.login-panel .form-control { min-height: 44px; border-color: var(--paper-line); background: var(--card); }
+.login-error { margin: 16px 0 0; color: var(--err); font-size: .9rem; }
+.sheets-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.sheets-filters > div { min-width: 0; }
+.sheets-filters .form-label { font-size: .82rem; margin-bottom: 6px; }
+.sheets-filters .form-control { margin: 0; min-width: 0; }
+#controleField .form-select { min-height: 44px; border-color: var(--paper-line); background-color: var(--paper); color: var(--ink); font-size: .85rem; }
+#excelControls { margin-top: 18px; }
+#btnImportarSheets { margin-top: 14px; }
+#sheetsStatus { margin-bottom: 0; line-height: 1.6; }
+@media (max-width: 520px) {
+  .header-logout { margin-left: auto; padding: 8px; font-size: .8rem; }
+  .header-logout i { display: none; }
+  .sheets-filters { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; }
+  .login-panel { padding: 24px; }
+}

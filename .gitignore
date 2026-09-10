@@ -11,3 +11,7 @@ pdf_debug.txt
 skills-lock.json
 .impeccable/
 .vercel/
+.env
+.env.*
+!.env.example
+*service-account*.json
