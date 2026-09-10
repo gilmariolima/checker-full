@@ -8,6 +8,7 @@ import unicodedata
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from typing import List
+from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -26,11 +27,12 @@ app.add_middleware(
 # ==========================================================
 # 🌐 Servir o Frontend (HTML, CSS, JS e ícone)
 # ==========================================================
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 @app.get("/")
 def home():
-    return FileResponse("frontend/leitor-extratos.html")
+    return FileResponse(FRONTEND_DIR / "leitor-extratos.html")
 
 
 # ==========================================================
@@ -118,7 +120,6 @@ async def detalhe_bb(file_bytes: bytes):
     tudo numa única linha, perdia registros sempre que a ordem real do PDF
     não era exatamente a esperada.
     """
-    print("\n========== [DEBUG] INÍCIO DA LEITURA PDF BANCO DO BRASIL ==========\n")
 
     try:
         paginas_texto = []
@@ -127,14 +128,10 @@ async def detalhe_bb(file_bytes: bytes):
                 paginas_texto.append(page.extract_text() or "")
         texto_total = "\n".join(paginas_texto)
 
-        with open("pdf_debug.txt", "w", encoding="utf-8") as f:
-            f.write(texto_total)
 
     except Exception as e:
-        print(f"\n⚠️ Erro ao ler PDF: {e}")
         return {"erro": f"Falha ao processar PDF ({e})"}
 
-    print("\n========== [DEBUG] PARSE LINHA A LINHA ==========\n")
 
     linhas = [l.strip() for l in texto_total.split("\n") if l.strip()]
     n = len(linhas)
@@ -191,7 +188,6 @@ async def detalhe_bb(file_bytes: bytes):
                     break
 
         if not (hora and valor_txt and nome_raw):
-            print(f"⚠️ [linha {i}] PIX - Recebido sem par válido de valor/detalhe nas vizinhanças, ignorado.")
             continue
 
         nome = re.sub(r"\s{2,}", " ", nome_raw.strip()).title()
@@ -229,11 +225,6 @@ async def detalhe_bb(file_bytes: bytes):
             vistos.add(chave)
     dados = sorted(unicos, key=lambda d: d["hora"])
 
-    print(f"\n========== [LOG - PIX RECEBIDOS BANCO DO BRASIL - FINAL] ==========")
-    print(f"Total detectado: {len(dados)}\n")
-    for i, d in enumerate(dados, start=1):
-        print(f"[{i:03}] {d['data']} {d['hora']} | {d['nome']} | R${d['valor']:.2f}")
-    print("=" * 100 + "\n")
 
     if not dados:
         return {"erro": "Nenhum lançamento PIX identificado no PDF do Banco do Brasil."}
@@ -343,11 +334,6 @@ def extrair_pix_c6(texto_total: str):
 
     dados = sorted(dados, key=sort_key)
 
-    print(f"\n========== [LOG - PIX RECEBIDOS C6 BANK - FINAL] ==========")
-    print(f"Total detectado: {len(dados)}\n")
-    for i, d in enumerate(dados, start=1):
-        print(f"[{i:03}] {d.get('data','')} {d.get('hora','')} | {d.get('nome')} | R${d.get('valor'):.2f}")
-    print("=" * 100 + "\n")
 
     return dados
 

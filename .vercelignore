@@ -1,0 +1,11 @@
+.git
+.venv
+.agents
+.claude
+.codex
+.impeccable
+__pycache__
+*.pyc
+*.log
+pdf_debug.txt
+test_*.py

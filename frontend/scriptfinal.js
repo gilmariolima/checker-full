@@ -240,6 +240,12 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
   if (!pdf || excels.length === 0)
     return alert('Envie o PDF e pelo menos uma planilha Excel!');
 
+  // Reserva espaço para os cabeçalhos multipart dentro do limite da Vercel.
+  const arquivos = [...document.getElementById('pdfFile').files, ...excels];
+  if (arquivos.reduce((total, arquivo) => total + arquivo.size, 0) > 4_000_000) {
+    return alert('Os arquivos selecionados ultrapassam 4 MB no total. Selecione menos arquivos ou reduza o tamanho dos PDFs e tente novamente.');
+  }
+
   const resEl = document.getElementById('resultado');
   resEl.innerHTML = '';
   document.getElementById('emptyState').hidden = true;
@@ -269,6 +275,11 @@ document.getElementById('btnConferir').addEventListener('click', async () => {
       body: fd
     });
 
+    if (!resp.ok) {
+      throw new Error(resp.status === 413
+        ? 'Os arquivos excedem o limite de envio. Reduza o tamanho e tente novamente.'
+        : 'Não foi possível concluir a conferência. Tente novamente com menos arquivos.');
+    }
     const dados = await resp.json();
     document.getElementById('progressArea').style.display = 'none';
 

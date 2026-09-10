@@ -27,7 +27,7 @@ Unifies two structurally different bank PDF export formats (Banco do Brasil, C6 
 
 - Only Banco do Brasil and C6 Bank PDF formats are supported; no other banks today (confirmed — do not assume broader bank support).
 - Stateless by design: no database, single-request processing, nothing persisted server-side between runs.
-- Statement/spreadsheet contents are sensitive and must not be sent to third parties or logged persistently — confirmed as a binding constraint. **Known gap against this**: `servidor.py`'s `detalhe_bb` currently writes the full extracted PDF text to `pdf_debug.txt` on disk on every run, and both BB/C6 parsers print each parsed name/value/time to stdout for debugging. This predates the confirmed privacy constraint and should be treated as tech debt to flag, not silently normal.
+- Statement/spreadsheet contents are sensitive and must not be sent to third parties or logged persistently — confirmed as a binding constraint. The Vercel adaptation removes the persistent PDF debug file and transaction debug output.
 - PT-BR only; no i18n need identified.
 
 ## Brand Commitments
